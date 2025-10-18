@@ -1,0 +1,410 @@
+use anyhow::Result;
+use crossbeam::queue::ArrayQueue;
+use dashmap::DashMap;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
+use uuid::Uuid;
+use zenoh::prelude::r#async::*;
+use zenoh::Session;
+
+use crate::buffer::{FlushTask, TopicBuffer};
+use crate::mcap_writer::McapSerializer;
+use crate::protocol::{
+    CompressionLevel, CompressionType, RecorderRequest, RecorderResponse, RecordingMetadata,
+    RecordingStatus, StatusResponse,
+};
+use crate::storage::{topic_to_entry_name, ReductStoreClient};
+
+/// Recording session state
+pub struct RecordingSession {
+    pub recording_id: String,
+    pub status: RwLock<RecordingStatus>,
+    pub metadata: RecordingMetadata,
+    pub topic_buffers: Arc<DashMap<String, Arc<TopicBuffer>>>,
+    pub start_time: SystemTime,
+    pub pause_time: RwLock<Option<SystemTime>>,
+    pub total_bytes: RwLock<i64>,
+    pub compression_type: CompressionType,
+    pub compression_level: CompressionLevel,
+}
+
+/// Recorder manager handles all recording sessions
+pub struct RecorderManager {
+    session: Arc<Session>,
+    sessions: Arc<DashMap<String, Arc<RecordingSession>>>,
+    storage_client: Arc<ReductStoreClient>,
+    flush_queue: Arc<ArrayQueue<FlushTask>>,
+    bucket_name: String,
+}
+
+impl RecorderManager {
+    pub fn new(session: Arc<Session>, reductstore_url: String, bucket_name: String) -> Self {
+        let storage_client = Arc::new(ReductStoreClient::new(reductstore_url, bucket_name.clone()));
+        let flush_queue = Arc::new(ArrayQueue::new(1000)); // Queue for flush tasks
+
+        let manager = Self {
+            session,
+            sessions: Arc::new(DashMap::new()),
+            storage_client,
+            flush_queue: flush_queue.clone(),
+            bucket_name,
+        };
+
+        // Start flush worker threads
+        manager.start_flush_workers();
+
+        manager
+    }
+
+    /// Start recording
+    pub async fn start_recording(&self, request: RecorderRequest) -> RecorderResponse {
+        let recording_id = Uuid::new_v4().to_string();
+
+        info!("Starting recording '{}'", recording_id);
+
+        // Ensure bucket exists
+        if let Err(e) = self.storage_client.ensure_bucket().await {
+            error!("Failed to ensure bucket exists: {}", e);
+            return RecorderResponse::error(format!("Failed to ensure bucket: {}", e));
+        }
+
+        let metadata = RecordingMetadata {
+            recording_id: recording_id.clone(),
+            scene: request.scene.clone(),
+            skills: request.skills.clone(),
+            organization: request.organization.clone(),
+            task_id: request.task_id.clone(),
+            device_id: request.device_id.clone(),
+            data_collector_id: request.data_collector_id.clone(),
+            topics: request.topics.clone(),
+            compression_type: format!("{:?}", request.compression_type),
+            compression_level: request.compression_level as i32,
+            start_time: chrono::Utc::now().to_rfc3339(),
+            end_time: None,
+            total_bytes: 0,
+            total_samples: 0,
+            per_topic_stats: serde_json::json!({}),
+        };
+
+        let recording_session = Arc::new(RecordingSession {
+            recording_id: recording_id.clone(),
+            status: RwLock::new(RecordingStatus::Recording),
+            metadata,
+            topic_buffers: Arc::new(DashMap::new()),
+            start_time: SystemTime::now(),
+            pause_time: RwLock::new(None),
+            total_bytes: RwLock::new(0),
+            compression_type: request.compression_type,
+            compression_level: request.compression_level,
+        });
+
+        // Subscribe to topics
+        for topic in &request.topics {
+            let buffer = Arc::new(TopicBuffer::new(
+                topic.clone(),
+                recording_id.clone(),
+                10 * 1024 * 1024,        // 10 MB max buffer size
+                Duration::from_secs(10), // 10 second max duration
+                self.flush_queue.clone(),
+            ));
+
+            recording_session
+                .topic_buffers
+                .insert(topic.clone(), buffer.clone());
+
+            // Subscribe to topic
+            let session = self.session.clone();
+            let recording_id_clone = recording_id.clone();
+            let topic_clone = topic.clone();
+
+            tokio::spawn(async move {
+                match session.declare_subscriber(&topic_clone).res().await {
+                    Ok(subscriber) => {
+                        info!(
+                            "Subscribed to topic '{}' for recording '{}'",
+                            topic_clone, recording_id_clone
+                        );
+
+                        loop {
+                            match subscriber.recv_async().await {
+                                Ok(sample) => {
+                                    if let Err(e) = buffer.push_sample(sample).await {
+                                        error!("Failed to push sample to buffer: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Error receiving sample: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to subscribe to topic '{}': {}", topic_clone, e);
+                    }
+                }
+            });
+        }
+
+        self.sessions
+            .insert(recording_id.clone(), recording_session);
+
+        RecorderResponse::success(Some(recording_id), Some(self.bucket_name.clone()))
+    }
+
+    /// Pause recording
+    pub async fn pause_recording(&self, recording_id: &str) -> RecorderResponse {
+        match self.sessions.get(recording_id) {
+            Some(session) => {
+                let mut status = session.status.write().await;
+                if *status == RecordingStatus::Recording {
+                    *status = RecordingStatus::Paused;
+                    *session.pause_time.write().await = Some(SystemTime::now());
+                    info!("Recording '{}' paused", recording_id);
+                    RecorderResponse::success(Some(recording_id.to_string()), None)
+                } else {
+                    RecorderResponse::error("Recording is not in Recording state".to_string())
+                }
+            }
+            None => RecorderResponse::error(format!("Recording '{}' not found", recording_id)),
+        }
+    }
+
+    /// Resume recording
+    pub async fn resume_recording(&self, recording_id: &str) -> RecorderResponse {
+        match self.sessions.get(recording_id) {
+            Some(session) => {
+                let mut status = session.status.write().await;
+                if *status == RecordingStatus::Paused {
+                    *status = RecordingStatus::Recording;
+                    *session.pause_time.write().await = None;
+                    info!("Recording '{}' resumed", recording_id);
+                    RecorderResponse::success(Some(recording_id.to_string()), None)
+                } else {
+                    RecorderResponse::error("Recording is not in Paused state".to_string())
+                }
+            }
+            None => RecorderResponse::error(format!("Recording '{}' not found", recording_id)),
+        }
+    }
+
+    /// Cancel recording
+    pub async fn cancel_recording(&self, recording_id: &str) -> RecorderResponse {
+        match self.sessions.remove(recording_id) {
+            Some((_, session)) => {
+                *session.status.write().await = RecordingStatus::Cancelled;
+                info!("Recording '{}' cancelled", recording_id);
+                RecorderResponse::success(Some(recording_id.to_string()), None)
+            }
+            None => RecorderResponse::error(format!("Recording '{}' not found", recording_id)),
+        }
+    }
+
+    /// Finish recording
+    pub async fn finish_recording(&self, recording_id: &str) -> RecorderResponse {
+        match self.sessions.get(recording_id) {
+            Some(session) => {
+                info!("Finishing recording '{}'", recording_id);
+
+                // Flush all remaining buffers
+                for entry in session.topic_buffers.iter() {
+                    if let Err(e) = entry.value().force_flush().await {
+                        error!("Failed to flush buffer for topic '{}': {}", entry.key(), e);
+                    }
+                }
+
+                // Wait a bit for flush tasks to complete
+                tokio::time::sleep(Duration::from_secs(2)).await;
+
+                *session.status.write().await = RecordingStatus::Finished;
+
+                // Write metadata
+                if let Err(e) = self.write_metadata(&session).await {
+                    error!("Failed to write metadata: {}", e);
+                }
+
+                info!("Recording '{}' finished", recording_id);
+                RecorderResponse::success(Some(recording_id.to_string()), None)
+            }
+            None => RecorderResponse::error(format!("Recording '{}' not found", recording_id)),
+        }
+    }
+
+    /// Get recording status
+    pub async fn get_status(&self, recording_id: &str) -> StatusResponse {
+        match self.sessions.get(recording_id) {
+            Some(session) => {
+                let status = *session.status.read().await;
+                let (_total_samples, total_bytes) = self.calculate_stats(&session).await;
+
+                StatusResponse {
+                    success: true,
+                    message: "Status retrieved successfully".to_string(),
+                    status,
+                    scene: session.metadata.scene.clone(),
+                    skills: session.metadata.skills.clone(),
+                    organization: session.metadata.organization.clone(),
+                    task_id: session.metadata.task_id.clone(),
+                    device_id: session.metadata.device_id.clone(),
+                    data_collector_id: session.metadata.data_collector_id.clone(),
+                    active_topics: session.metadata.topics.clone(),
+                    buffer_size_bytes: total_bytes as i32,
+                    total_recorded_bytes: *session.total_bytes.read().await,
+                }
+            }
+            None => StatusResponse {
+                success: false,
+                message: format!("Recording '{}' not found", recording_id),
+                status: RecordingStatus::Idle,
+                scene: None,
+                skills: vec![],
+                organization: None,
+                task_id: None,
+                device_id: String::new(),
+                data_collector_id: None,
+                active_topics: vec![],
+                buffer_size_bytes: 0,
+                total_recorded_bytes: 0,
+            },
+        }
+    }
+
+    /// Calculate current statistics
+    async fn calculate_stats(&self, session: &RecordingSession) -> (usize, usize) {
+        let mut total_samples = 0;
+        let mut total_bytes = 0;
+
+        for entry in session.topic_buffers.iter() {
+            let (samples, bytes) = entry.value().stats();
+            total_samples += samples;
+            total_bytes += bytes;
+        }
+
+        (total_samples, total_bytes)
+    }
+
+    /// Write metadata to ReductStore
+    async fn write_metadata(&self, session: &RecordingSession) -> Result<()> {
+        let metadata = serde_json::to_vec(&session.metadata)?;
+        let timestamp_us = session.start_time.duration_since(UNIX_EPOCH)?.as_micros() as u64;
+
+        let mut labels = HashMap::new();
+        labels.insert("recording_id".to_string(), session.recording_id.clone());
+        labels.insert("device_id".to_string(), session.metadata.device_id.clone());
+        if let Some(scene) = &session.metadata.scene {
+            labels.insert("scene".to_string(), scene.clone());
+        }
+
+        self.storage_client
+            .write_record_with_retry("recordings_metadata", timestamp_us, metadata, labels, 3)
+            .await
+    }
+
+    /// Start flush worker threads
+    fn start_flush_workers(&self) {
+        for i in 0..4 {
+            let flush_queue = self.flush_queue.clone();
+            let storage_client = self.storage_client.clone();
+            let sessions = self.sessions.clone();
+
+            tokio::spawn(async move {
+                debug!("Flush worker {} started", i);
+                loop {
+                    if let Some(task) = flush_queue.pop() {
+                        Self::process_flush_task(task, storage_client.clone(), sessions.clone())
+                            .await;
+                    } else {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
+            });
+        }
+    }
+
+    /// Process a flush task
+    async fn process_flush_task(
+        task: FlushTask,
+        storage_client: Arc<ReductStoreClient>,
+        sessions: Arc<DashMap<String, Arc<RecordingSession>>>,
+    ) {
+        debug!(
+            "Processing flush task for topic '{}' ({} samples)",
+            task.topic,
+            task.samples.len()
+        );
+
+        let session = match sessions.get(&task.recording_id) {
+            Some(s) => s,
+            None => {
+                warn!(
+                    "Recording session '{}' not found, dropping flush task",
+                    task.recording_id
+                );
+                return;
+            }
+        };
+
+        // Serialize to MCAP
+        let serializer = McapSerializer::new(session.compression_type, session.compression_level);
+        let mcap_data =
+            match serializer.serialize_batch(&task.topic, task.samples, &task.recording_id) {
+                Ok(data) => data,
+                Err(e) => {
+                    error!("Failed to serialize MCAP data: {}", e);
+                    return;
+                }
+            };
+
+        // Upload to ReductStore
+        let entry_name = topic_to_entry_name(&task.topic);
+        let timestamp_us = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as u64;
+
+        let mut labels = HashMap::new();
+        labels.insert("recording_id".to_string(), task.recording_id.clone());
+        labels.insert("topic".to_string(), task.topic.clone());
+        labels.insert("format".to_string(), "mcap".to_string());
+
+        match storage_client
+            .write_record_with_retry(&entry_name, timestamp_us, mcap_data, labels, 3)
+            .await
+        {
+            Ok(_) => {
+                debug!(
+                    "Successfully uploaded flush task for topic '{}'",
+                    task.topic
+                );
+            }
+            Err(e) => {
+                error!(
+                    "Failed to upload flush task for topic '{}': {}",
+                    task.topic, e
+                );
+            }
+        }
+    }
+
+    /// Shutdown recorder manager
+    pub async fn shutdown(&self) -> Result<()> {
+        info!("Shutting down recorder manager");
+
+        // Finish all active recordings
+        let recording_ids: Vec<String> = self.sessions.iter().map(|e| e.key().clone()).collect();
+        for recording_id in recording_ids {
+            let response = self.finish_recording(&recording_id).await;
+            if !response.success {
+                error!(
+                    "Failed to finish recording '{}': {}",
+                    recording_id, response.message
+                );
+            }
+        }
+
+        Ok(())
+    }
+}

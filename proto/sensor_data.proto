@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package sensor_data;
+
+// Generic sensor message for demonstration
+message SensorData {
+    string topic = 1;
+    int64 timestamp_ns = 2;
+    string frame_id = 3;
+    bytes payload = 4;
+}
+
+// Camera image message
+message ImageData {
+    uint32 width = 1;
+    uint32 height = 2;
+    string encoding = 3;
+    bytes data = 4;
+    int64 timestamp_ns = 5;
+}
+
+// LiDAR point cloud
+message PointCloud {
+    repeated Point points = 1;
+    int64 timestamp_ns = 2;
+    string frame_id = 3;
+}
+
+message Point {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+    float intensity = 4;
+}
+
+// IMU data
+message ImuData {
+    Vector3 linear_acceleration = 1;
+    Vector3 angular_velocity = 2;
+    Quaternion orientation = 3;
+    int64 timestamp_ns = 4;
+}
+
+message Vector3 {
+    double x = 1;
+    double y = 2;
+    double z = 3;
+}
+
+message Quaternion {
+    double x = 1;
+    double y = 2;
+    double z = 3;
+    double w = 4;
+}
+

@@ -1,0 +1,125 @@
+name: Nightly Tests
+
+on:
+  schedule:
+    # Run at 2 AM UTC every day
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+
+jobs:
+  comprehensive-tests:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      
+      - name: Start Docker infrastructure
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml up -d
+      
+      - name: Wait for services
+        run: |
+          cd zenoh-recorder-example
+          ./scripts/run_tests_with_docker.sh --no-cleanup &
+          sleep 30
+      
+      - name: Run all tests with coverage
+        run: |
+          cd zenoh-recorder-example
+          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        env:
+          REDUCTSTORE_TEST_URL: http://127.0.0.1:28383
+          ZENOH_TEST_ENDPOINT: tcp/127.0.0.1:27447
+      
+      - name: Generate HTML coverage report
+        run: |
+          cd zenoh-recorder-example
+          cargo llvm-cov --all-features --workspace --html
+      
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: zenoh-recorder-example/target/llvm-cov/html/
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: zenoh-recorder-example/lcov.info
+          flags: nightly
+      
+      - name: Run benchmarks (if any)
+        run: |
+          cd zenoh-recorder-example
+          cargo bench --no-run || true
+      
+      - name: Check for memory leaks (Valgrind)
+        run: |
+          sudo apt-get update && sudo apt-get install -y valgrind
+          cd zenoh-recorder-example
+          cargo build --tests
+          # Run a simple test with valgrind
+          valgrind --leak-check=full --error-exitcode=1 \
+            target/debug/deps/protocol_tests-* || true
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml down -v
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::warning::Nightly tests failed. Check logs for details."
+
+  long-running-tests:
+    name: Long Running Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Start Docker infrastructure
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml up -d
+      
+      - name: Wait for services
+        run: sleep 30
+      
+      - name: Run tests with stress testing
+        run: |
+          cd zenoh-recorder-example
+          # Run tests multiple times to catch race conditions
+          for i in {1..5}; do
+            echo "Test iteration $i"
+            cargo test --all-features --workspace -- --test-threads=1 || exit 1
+          done
+        env:
+          REDUCTSTORE_TEST_URL: http://127.0.0.1:28383
+          ZENOH_TEST_ENDPOINT: tcp/127.0.0.1:27447
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml down -v
+

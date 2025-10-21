@@ -8,6 +8,7 @@
 // - Supports distributed recording control via request-response protocol
 
 pub mod buffer;
+pub mod config;
 pub mod control;
 pub mod mcap_writer;
 pub mod protocol;
@@ -16,6 +17,7 @@ pub mod storage;
 
 // Re-export main types
 pub use buffer::{FlushTask, TopicBuffer};
+pub use config::{RecorderConfig, load_config, load_config_with_env};
 pub use control::ControlInterface;
 pub use mcap_writer::McapSerializer;
 pub use protocol::{

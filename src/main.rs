@@ -1,18 +1,36 @@
 use anyhow::Result;
+use clap::Parser;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 use zenoh::prelude::r#async::*;
 
 mod buffer;
+mod config;
 mod control;
 mod mcap_writer;
 mod protocol;
 mod recorder;
 mod storage;
 
+use config::load_config_with_env;
 use control::ControlInterface;
 use recorder::RecorderManager;
+use storage::BackendFactory;
+
+/// Zenoh Recorder - Record Zenoh topics to storage backends
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Path to configuration file
+    #[arg(short, long, default_value = "config/default.yaml")]
+    config: PathBuf,
+    
+    /// Device ID (overrides config file)
+    #[arg(short, long)]
+    device_id: Option<String>,
+}
 
 // Include protobuf definitions
 pub mod proto {
@@ -21,39 +39,94 @@ pub mod proto {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
+    // Parse CLI arguments
+    let args = Args::parse();
+    
+    // Load configuration from file
+    let mut recorder_config = load_config_with_env(&args.config)?;
+    
+    // Apply CLI overrides
+    if let Some(device_id) = args.device_id {
+        recorder_config.recorder.device_id = device_id;
+    }
+    
+    // Initialize tracing with configured level
+    let log_level = match recorder_config.logging.level.to_lowercase().as_str() {
+        "trace" => Level::TRACE,
+        "debug" => Level::DEBUG,
+        "info" => Level::INFO,
+        "warn" => Level::WARN,
+        "error" => Level::ERROR,
+        _ => Level::INFO,
+    };
+    
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+        .with_max_level(log_level)
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
     info!("Starting Zenoh Recorder");
+    info!("Loaded configuration from: {:?}", args.config);
+    info!("Device ID: {}", recorder_config.recorder.device_id);
+    info!("Storage backend: {}", recorder_config.storage.backend);
 
-    // Configuration from environment variables
-    let device_id = std::env::var("DEVICE_ID").unwrap_or_else(|_| "robot_01".to_string());
-    let reductstore_url =
-        std::env::var("REDUCTSTORE_URL").unwrap_or_else(|_| "http://localhost:8383".to_string());
-    let bucket_name = std::env::var("BUCKET_NAME").unwrap_or_else(|_| "ros_data".to_string());
+    // Build Zenoh config
+    let mut zenoh_config = Config::default();
+    
+    // Set mode
+    match recorder_config.zenoh.mode.as_str() {
+        "peer" => zenoh_config.set_mode(Some(WhatAmI::Peer))?,
+        "client" => zenoh_config.set_mode(Some(WhatAmI::Client))?,
+        "router" => zenoh_config.set_mode(Some(WhatAmI::Router))?,
+        _ => zenoh_config.set_mode(Some(WhatAmI::Peer))?,
+    }
+    
+    // Set connect endpoints
+    if let Some(connect_config) = &recorder_config.zenoh.connect {
+        let endpoints: Vec<zenoh_config::EndPoint> = connect_config
+            .endpoints
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        zenoh_config.connect.endpoints.set(endpoints)?;
+    }
+    
+    // Set listen endpoints
+    if let Some(listen_config) = &recorder_config.zenoh.listen {
+        let endpoints: Vec<zenoh_config::EndPoint> = listen_config
+            .endpoints
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        zenoh_config.listen.endpoints.set(endpoints)?;
+    }
 
     // Open Zenoh session
-    let config = Config::default();
     let session = Arc::new(
-        zenoh::open(config)
+        zenoh::open(zenoh_config)
             .res()
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e))?,
+            .map_err(|e| anyhow::anyhow!("Failed to open Zenoh session: {}", e))?,
     );
 
     info!("Zenoh session opened");
 
+    // Create storage backend
+    let storage_backend = BackendFactory::create(&recorder_config.storage)?;
+    info!("Storage backend initialized: {}", storage_backend.backend_type());
+    
+    // Initialize storage backend
+    storage_backend.initialize().await?;
+
     // Create recorder manager
     let recorder_manager = Arc::new(RecorderManager::new(
         session.clone(),
-        reductstore_url,
-        bucket_name,
+        storage_backend,
+        recorder_config.clone(),
     ));
 
     // Start control interface
+    let device_id = recorder_config.recorder.device_id.clone();
     let control_interface =
         ControlInterface::new(session.clone(), recorder_manager.clone(), device_id.clone());
 
@@ -77,6 +150,7 @@ async fn main() -> Result<()> {
 
     // Cleanup
     recorder_manager.shutdown().await?;
+    info!("Zenoh Recorder shut down successfully");
 
     Ok(())
 }

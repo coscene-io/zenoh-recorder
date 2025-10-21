@@ -1,0 +1,50 @@
+name: Quick Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quick-check:
+    name: Quick Check (Format & Clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Check formatting
+        run: |
+          cd zenoh-recorder-example
+          cargo fmt --all -- --check
+      
+      - name: Run clippy
+        run: |
+          cd zenoh-recorder-example
+          cargo clippy --all-features --all-targets -- -D warnings
+      
+      - name: Build check
+        run: |
+          cd zenoh-recorder-example
+          cargo build --all-features
+      
+      - name: Run fast unit tests
+        run: |
+          cd zenoh-recorder-example
+          cargo test --lib control_unit_tests edge_case_coverage_tests protocol_tests
+

@@ -1,0 +1,245 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Fast unit tests without Docker
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache target directory
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run unit tests
+        run: |
+          cd zenoh-recorder-example
+          cargo test --lib --tests \
+            --exclude e2e_docker_tests \
+            --exclude storage_integration_tests
+      
+      - name: Run doc tests
+        run: |
+          cd zenoh-recorder-example
+          cargo test --doc
+
+  # Linting and formatting
+  lint:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Check formatting
+        run: |
+          cd zenoh-recorder-example
+          cargo fmt --all -- --check
+      
+      - name: Run clippy
+        run: |
+          cd zenoh-recorder-example
+          cargo clippy --all-features --all-targets -- -D warnings
+
+  # Build check
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Build
+        run: |
+          cd zenoh-recorder-example
+          cargo build --release
+      
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: zenoh-recorder-binary
+          path: zenoh-recorder-example/target/release/zenoh-recorder
+
+  # Integration tests with Docker
+  integration-tests:
+    name: Integration Tests (Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Start Docker services
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml up -d
+      
+      - name: Wait for services to be ready
+        run: |
+          cd zenoh-recorder-example
+          echo "Waiting for ReductStore..."
+          for i in {1..30}; do
+            if curl -sf http://127.0.0.1:28383/api/v1/info > /dev/null 2>&1; then
+              echo "ReductStore is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "ReductStore failed to start"
+              docker-compose -f docker-compose.test.yml logs reductstore-test
+              exit 1
+            fi
+            sleep 2
+          done
+          
+          echo "Waiting for Zenoh..."
+          for i in {1..30}; do
+            if nc -z 127.0.0.1 27447 > /dev/null 2>&1; then
+              echo "Zenoh is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Zenoh failed to start"
+              docker-compose -f docker-compose.test.yml logs zenoh-test
+              exit 1
+            fi
+            sleep 2
+          done
+      
+      - name: Run storage integration tests
+        run: |
+          cd zenoh-recorder-example
+          cargo test --test storage_integration_tests -- --test-threads=1
+        env:
+          REDUCTSTORE_TEST_URL: http://127.0.0.1:28383
+          REDUCTSTORE_TEST_BUCKET: zenoh-recorder-test
+      
+      - name: Run E2E tests
+        run: |
+          cd zenoh-recorder-example
+          cargo test --test e2e_docker_tests -- --test-threads=1
+        env:
+          ZENOH_TEST_ENDPOINT: tcp/127.0.0.1:27447
+          REDUCTSTORE_TEST_URL: http://127.0.0.1:28383
+          REDUCTSTORE_TEST_BUCKET: zenoh-e2e-test
+      
+      - name: Show Docker logs on failure
+        if: failure()
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml logs
+      
+      - name: Cleanup Docker services
+        if: always()
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml down -v
+
+  # Coverage report
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      
+      - name: Start Docker services
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml up -d
+      
+      - name: Wait for services
+        run: |
+          cd zenoh-recorder-example
+          for i in {1..30}; do
+            if curl -sf http://127.0.0.1:28383/api/v1/info > /dev/null 2>&1; then
+              echo "ReductStore ready"
+              break
+            fi
+            sleep 2
+          done
+          for i in {1..30}; do
+            if nc -z 127.0.0.1 27447 > /dev/null 2>&1; then
+              echo "Zenoh ready"
+              break
+            fi
+            sleep 2
+          done
+      
+      - name: Generate coverage
+        run: |
+          cd zenoh-recorder-example
+          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        env:
+          REDUCTSTORE_TEST_URL: http://127.0.0.1:28383
+          ZENOH_TEST_ENDPOINT: tcp/127.0.0.1:27447
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: zenoh-recorder-example/lcov.info
+          fail_ci_if_error: false
+          verbose: true
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          cd zenoh-recorder-example
+          docker-compose -f docker-compose.test.yml down -v
+
+  # Security audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run cargo audit
+        uses: rustsec/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+

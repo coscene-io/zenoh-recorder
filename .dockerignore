@@ -1,0 +1,17 @@
+target/
+.git/
+.github/
+*.md
+*.swp
+*.swo
+*~
+.DS_Store
+tests/
+examples/
+docs/
+*.mcap
+Cargo.lock
+docker-compose*.yml
+test.env
+scripts/
+

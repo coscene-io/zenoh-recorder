@@ -6,3 +6,13 @@ Cargo.lock
 *~
 .DS_Store
 
+# Coverage reports
+target/llvm-cov/
+lcov.info
+*.profraw
+*.profdata
+
+# CI artifacts
+*.tar.gz
+*.zip
+

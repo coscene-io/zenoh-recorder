@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Zenoh router for E2E tests
+  zenoh-test:
+    image: eclipse/zenoh:latest
+    container_name: zenoh-recorder-test
+    ports:
+      - "27447:7447"  # Custom port to avoid conflict with host Zenoh
+    networks:
+      - recorder-test-net
+    healthcheck:
+      test: ["CMD", "zenoh-plugin-rest", "info"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    
+  # ReductStore for E2E tests
+  reductstore-test:
+    image: reduct/store:latest
+    container_name: reductstore-recorder-test
+    ports:
+      - "28383:8383"  # Custom port to avoid conflict with host ReductStore
+    environment:
+      - RS_LOG_LEVEL=INFO
+      - RS_DATA_PATH=/data
+      - RS_API_BASE_PATH=/
+    volumes:
+      - test-data:/data
+    networks:
+      - recorder-test-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8383/api/v1/info"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  recorder-test-net:
+    driver: bridge
+    name: zenoh-recorder-test-network
+
+volumes:
+  test-data:
+    name: zenoh-recorder-test-data
+

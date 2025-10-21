@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Zenoh router
+  zenoh:
+    image: eclipse/zenoh:latest
+    container_name: zenoh-router
+    ports:
+      - "7447:7447"
+    networks:
+      - zenoh-net
+    restart: unless-stopped
+
+  # ReductStore
+  reductstore:
+    image: reduct/store:latest
+    container_name: reductstore
+    ports:
+      - "8383:8383"
+    environment:
+      - RS_LOG_LEVEL=INFO
+      - RS_DATA_PATH=/data
+    volumes:
+      - reductstore-data:/data
+    networks:
+      - zenoh-net
+    restart: unless-stopped
+
+  # Zenoh Recorder
+  recorder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zenoh-recorder
+    depends_on:
+      - zenoh
+      - reductstore
+    environment:
+      - DEVICE_ID=recorder-prod-001
+      - REDUCTSTORE_URL=http://reductstore:8383
+      - BUCKET_NAME=zenoh_recordings
+      - RUST_LOG=zenoh_recorder=info
+    networks:
+      - zenoh-net
+    restart: unless-stopped
+
+networks:
+  zenoh-net:
+    driver: bridge
+
+volumes:
+  reductstore-data:
+

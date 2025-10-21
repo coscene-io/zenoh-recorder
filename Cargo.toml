@@ -27,6 +27,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 flate2 = "1"
 lz4 = "1.24"
 zstd = "0.13"
+serde_yaml = "0.9"
+regex = "1"
+clap = { version = "4", features = ["derive"] }
 
 [build-dependencies]
 prost-build = "0.12"

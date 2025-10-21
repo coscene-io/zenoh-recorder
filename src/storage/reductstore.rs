@@ -86,8 +86,9 @@ impl ReductStoreBackend {
                     info!("Bucket '{}' created successfully", self.bucket_name);
                     Ok(())
                 } else {
+                    let status = response.status();
                     let error_text = response.text().await.unwrap_or_default();
-                    bail!("Failed to create bucket: {} - {}", response.status(), error_text)
+                    bail!("Failed to create bucket: {} - {}", status, error_text)
                 }
             }
         }

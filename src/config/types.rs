@@ -89,7 +89,9 @@ impl Default for StorageConfig {
     fn default() -> Self {
         Self {
             backend: "reductstore".to_string(),
-            backend_config: BackendConfig::ReductStore(ReductStoreConfig::default()),
+            backend_config: BackendConfig::ReductStore {
+                reductstore: ReductStoreConfig::default(),
+            },
         }
     }
 }

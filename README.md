@@ -98,8 +98,8 @@ For a complete deployment example, see `examples/docker-compose.yml`.
 
 ### 🔌 Multi-Backend Storage
 - **Pluggable Backends**: Trait-based storage abstraction
-- **ReductStore**: Time-series database (primary)
-- **Filesystem**: MCAP files to disk (coming soon)
+- **ReductStore**: Time-series database (production ready)
+- **Filesystem**: MCAP files to disk (production ready)
 - **InfluxDB**: Metrics and analytics (coming soon)
 - **S3**: Cloud archival (coming soon)
 - **Easy to Extend**: Implement `StorageBackend` trait for new backends
@@ -159,7 +159,7 @@ For a complete deployment example, see `examples/docker-compose.yml`.
   ```bash
   docker run -d -p 8383:8383 reduct/store:latest
   ```
-- **Filesystem** (no external service needed)
+- **Filesystem** (production ready - no external service needed)
 - **InfluxDB** (coming soon)
 - **S3** (coming soon)
 
@@ -585,11 +585,13 @@ RUST_LOG=zenoh_recorder=debug ./target/release/zenoh-recorder --config config/de
 
 **Query**: Use ReductStore Web UI at `http://localhost:8383` or HTTP API
 
-### 🔜 Filesystem (Coming Soon)
+### ✅ Filesystem (Production Ready)
 **Best for**: Offline recording, edge devices
 
 - Writes MCAP files to local disk
 - No external dependencies
+- Automatic directory organization by entry name
+- JSON metadata files for labels
 - Query with MCAP tools or Foxglove Studio
 
 ### 🔜 InfluxDB (Coming Soon)
@@ -627,7 +629,7 @@ See [docs/CONFIG_AND_STORAGE_DESIGN.md](docs/CONFIG_AND_STORAGE_DESIGN.md) for d
 
 | Feature | ReductStore | Filesystem | InfluxDB | S3 |
 |---------|-------------|------------|----------|-----|
-| **Status** | ✅ Ready | 🔜 Soon | 🔜 Soon | 🔜 Soon |
+| **Status** | ✅ Ready | ✅ Ready | 🔜 Soon | 🔜 Soon |
 | **Best For** | Time-series | Edge/Offline | Metrics | Archive |
 | **Query UI** | Web UI | Foxglove | Grafana | Athena |
 | **Setup** | Docker | None | Docker | Cloud |
@@ -645,10 +647,10 @@ See [docs/CONFIG_AND_STORAGE_DESIGN.md](docs/CONFIG_AND_STORAGE_DESIGN.md) for d
 - [x] **Configurable worker pools**
 - [x] **CLI with config file support**
 - [x] **Comprehensive documentation**
+- [x] **Filesystem backend implementation**
 
 ## Future Enhancements
 
-- [ ] Filesystem backend implementation
 - [ ] InfluxDB backend implementation
 - [ ] S3 backend implementation
 - [ ] Multi-backend writes (primary + fallback)

@@ -23,10 +23,12 @@
 
 pub mod backend;
 pub mod factory;
+pub mod filesystem;
 pub mod reductstore;
 
 pub use backend::StorageBackend;
 pub use factory::BackendFactory;
+pub use filesystem::FilesystemBackend;
 pub use reductstore::{topic_to_entry_name, ReductStoreBackend};
 
 // Re-export for backward compatibility

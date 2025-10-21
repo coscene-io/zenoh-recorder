@@ -40,6 +40,9 @@ clap = { version = "4", features = ["derive"] }
 [build-dependencies]
 prost-build = "0.12"
 
+[dev-dependencies]
+tempfile = "3"
+
 [[bin]]
 name = "zenoh-recorder"
 path = "src/main.rs"

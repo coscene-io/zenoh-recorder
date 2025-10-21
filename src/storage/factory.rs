@@ -15,10 +15,14 @@
 // Backend factory for creating storage backends from configuration
 
 use super::backend::StorageBackend;
+use super::filesystem::FilesystemBackend;
 use super::reductstore::ReductStoreBackend;
-use crate::config::{BackendConfig, StorageConfig};
+use crate::config::StorageConfig;
 use anyhow::{bail, Result};
 use std::sync::Arc;
+
+#[cfg(test)]
+use crate::config::BackendConfig;
 
 pub struct BackendFactory;
 
@@ -37,8 +41,13 @@ impl BackendFactory {
             }
             
             "filesystem" => {
-                // TODO: Implement filesystem backend in Phase 3
-                bail!("Filesystem backend not yet implemented. Coming in Phase 3!")
+                let backend_config = config
+                    .backend_config
+                    .as_filesystem()
+                    .ok_or_else(|| anyhow::anyhow!("Filesystem config missing"))?;
+                
+                let backend = FilesystemBackend::new(backend_config.clone())?;
+                Ok(Arc::new(backend))
             }
             
             "influxdb" => {
@@ -52,7 +61,7 @@ impl BackendFactory {
             }
             
             unknown => bail!(
-                "Unknown storage backend: '{}'. Supported: reductstore (filesystem, influxdb, s3 coming soon)",
+                "Unknown storage backend: '{}'. Supported: reductstore, filesystem (influxdb, s3 coming soon)",
                 unknown
             ),
         }
@@ -79,7 +88,7 @@ mod tests {
     }
     
     #[test]
-    fn test_create_unsupported_backend() {
+    fn test_create_filesystem_backend() {
         let storage_config = StorageConfig {
             backend: "filesystem".to_string(),
             backend_config: BackendConfig::Filesystem {
@@ -88,8 +97,8 @@ mod tests {
         };
         
         let backend = BackendFactory::create(&storage_config);
-        assert!(backend.is_err());
-        assert!(backend.unwrap_err().to_string().contains("not yet implemented"));
+        assert!(backend.is_ok());
+        assert_eq!(backend.unwrap().backend_type(), "filesystem");
     }
     
     #[test]
@@ -103,7 +112,9 @@ mod tests {
         
         let backend = BackendFactory::create(&storage_config);
         assert!(backend.is_err());
-        assert!(backend.unwrap_err().to_string().contains("Unknown storage backend"));
+        if let Err(e) = backend {
+            assert!(e.to_string().contains("Unknown storage backend"));
+        }
     }
 }
 

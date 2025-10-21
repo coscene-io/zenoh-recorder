@@ -25,21 +25,11 @@ jobs:
           RS_API_BASE_PATH: /
         ports:
           - 28383:8383
-        options: >-
-          --health-cmd="curl -f http://localhost:8383/api/v1/info || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
       
       zenoh:
         image: eclipse/zenoh:latest
         ports:
           - 27447:7447
-        options: >-
-          --health-cmd="zenoh-plugin-rest info || exit 0"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
     
     steps:
       - uses: actions/checkout@v4
@@ -128,21 +118,11 @@ jobs:
           RS_API_BASE_PATH: /
         ports:
           - 28383:8383
-        options: >-
-          --health-cmd="curl -f http://localhost:8383/api/v1/info || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
       
       zenoh:
         image: eclipse/zenoh:latest
         ports:
           - 27447:7447
-        options: >-
-          --health-cmd="zenoh-plugin-rest info || exit 0"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
     
     steps:
       - uses: actions/checkout@v4

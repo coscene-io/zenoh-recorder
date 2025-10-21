@@ -1,68 +1,212 @@
-# Zenoh Recorder with ReductStore Backend
+# Zenoh Recorder
 
-A high-performance data recorder for Zenoh middleware that:
-- Records multi-topic data streams
-- Flushes data based on size or time thresholds
-- Serializes data to MCAP format with protobuf messages
-- Stores data in ReductStore with configurable compression
-- Supports distributed recording control via request-response protocol
+A high-performance, write-only data recorder for Zenoh middleware with **multi-backend storage support**.
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#-quick-start)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Building](#building)
+- [Running](#running)
+- [Usage Examples](#usage-examples)
+- [Configuration](#configuration)
+- [Supported Backends](#supported-backends)
+- [Performance Tuning](#performance-tuning)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
+- [License](#license)
+
+## Overview
+
+The Zenoh Recorder is a lightweight agent that:
+- 📊 Records multi-topic data streams from Zenoh
+- ⚙️ **Configurable flush triggers** (size & time based)
+- 📦 Serializes to MCAP format with protobuf messages
+- 🔌 **Supports multiple storage backends** (ReductStore, Filesystem, InfluxDB, S3)
+- 🎯 **YAML configuration** with environment variable support
+- 🚀 High-performance with **configurable worker pools**
+- 🎛️ Distributed recording control via request-response protocol
+- 🔄 Automatic retry logic with exponential backoff
+
+## 🆕 What's New in v0.1
+
+This release introduces a complete configuration and multi-backend storage system:
+
+- ✅ **YAML Configuration**: All settings externalized to config files
+- ✅ **Multi-Backend Support**: Trait-based storage abstraction
+- ✅ **Flexible Flush Policies**: Configure size and time triggers
+- ✅ **Per-Topic Compression**: Optimize compression per data type
+- ✅ **Worker Pools**: Configurable parallelism
+- ✅ **Environment Variables**: `${VAR:-default}` substitution support
+
+**Migration Note**: Existing code continues to work via backward-compatible API.
+
+## 🚀 Quick Start
+
+```bash
+# 1. Clone and build
+git clone <repository>
+cd zenoh-recorder
+cargo build --release
+
+# 2. Start infrastructure (Docker)
+docker run -d -p 7447:7447 eclipse/zenoh:latest
+docker run -d -p 8383:8383 reduct/store:latest
+
+# 3. Run recorder with default config
+./target/release/zenoh-recorder --config config/default.yaml
+
+# 4. Start a recording (in another terminal)
+echo '{
+  "command": "start",
+  "device_id": "robot-001",
+  "topics": ["/test/data"],
+  "compression_type": "zstd",
+  "compression_level": 2
+}' | z_put 'recorder/control/recorder-001'
+
+# 5. Query data in ReductStore Web UI
+open http://localhost:8383
+```
+
+For a complete deployment example, see `examples/docker-compose.yml`.
 
 ## Features
 
+### Core Capabilities
 - **Multi-topic Recording**: Subscribe to multiple Zenoh topics simultaneously
 - **MCAP Format**: Industry-standard container format for time-series data
 - **Protobuf Serialization**: Efficient binary serialization
-- **Compression**: LZ4 and Zstd compression support
+- **Compression**: LZ4 and Zstd compression support (per-topic configurable)
 - **Double Buffering**: Non-blocking writes while flushing
-- **Size/Time Based Flushing**: Configurable flush policies
-- **ReductStore Backend**: Cloud-native time-series database
+- **Size/Time Based Flushing**: Fully configurable flush policies
 - **Request-Response Protocol**: Control recordings via Zenoh queries
 - **Retry Logic**: Automatic retry with exponential backoff
 
+### 🆕 Configuration System
+- **YAML Configuration**: Externalized configuration files
+- **Environment Variables**: `${VAR}` and `${VAR:-default}` substitution
+- **CLI Arguments**: Override config values via command line
+- **Validation**: Automatic config validation on startup
+- **Per-Topic Settings**: Customize compression per topic pattern
+
+### 🔌 Multi-Backend Storage
+- **Pluggable Backends**: Trait-based storage abstraction
+- **ReductStore**: Time-series database (primary)
+- **Filesystem**: MCAP files to disk (coming soon)
+- **InfluxDB**: Metrics and analytics (coming soon)
+- **S3**: Cloud archival (coming soon)
+- **Easy to Extend**: Implement `StorageBackend` trait for new backends
+
+### 🚀 Performance
+- **Configurable Workers**: Tune parallelism for your workload
+- **Lock-free Queues**: Minimize contention
+- **Connection Pooling**: HTTP/2 connection reuse
+- **SIMD Compression**: Hardware-accelerated compression
+
 ## Architecture
 
+### Write-Only Agent Design
+
 ```
-Zenoh Network → Subscribers → Lock-free Queues → Topic Buffers
-                                                       ↓
-                                              Double Buffers
-                                                       ↓
-                                              Flush Workers
-                                                       ↓
-                                              MCAP Serializer
-                                                       ↓
-                                              ReductStore Client
-                                                       ↓
-                                              ReductStore
+┌──────────────────────────────────────────────────────┐
+│  Zenoh Recorder (Write-Only Agent)                   │
+│                                                       │
+│  Zenoh Subscribers → Topic Buffers → Flush Workers   │
+│                           ↓               ↓           │
+│                    Double Buffers   MCAP Serializer   │
+│                           ↓               ↓           │
+│                   Size/Time Triggers  Compression     │
+│                                           ↓           │
+│                                  StorageBackend Trait │
+└───────────────────────────────────────────┬───────────┘
+                                            │
+                        ┌───────────────────┴──────────────────┐
+                        │   Backend (User Selects via Config)  │
+                        │                                       │
+                        │  • ReductStore (time-series)          │
+                        │  • Filesystem (MCAP files)            │
+                        │  • InfluxDB (metrics)                 │
+                        │  • S3 (cloud archive)                 │
+                        └───────────────────────────────────────┘
+                                            ↓
+                        ┌───────────────────────────────────────┐
+                        │   Query Tools (Backend-Specific)      │
+                        │                                       │
+                        │  • ReductStore Web UI / API           │
+                        │  • Grafana Dashboards                 │
+                        │  • MCAP Tools / Foxglove Studio       │
+                        │  • S3 Select / Athena                 │
+                        └───────────────────────────────────────┘
 ```
+
+**Key Principle**: Recorder writes, users query backend directly using specialized tools.
 
 ## Prerequisites
 
-1. **Zenoh**: Ensure Zenoh router is running
-2. **ReductStore**: Run ReductStore locally or remotely
+### Required
+1. **Rust**: 1.75 or later
+2. **Zenoh**: Zenoh router or peer network
 
-### Start ReductStore (Docker)
+### Storage Backend (Choose One or More)
+- **ReductStore** (recommended for time-series data)
+  ```bash
+  docker run -d -p 8383:8383 reduct/store:latest
+  ```
+- **Filesystem** (no external service needed)
+- **InfluxDB** (coming soon)
+- **S3** (coming soon)
+
+### Quick Start with Docker Compose
+
+We provide a complete example with Zenoh + ReductStore + Recorder:
 
 ```bash
-docker run -d -p 8383:8383 reduct/store:latest
+cd zenoh-recorder/examples
+docker-compose up -d
 ```
+
+This starts:
+- Zenoh router on port 7447
+- ReductStore on port 8383
+- Zenoh Recorder agent
 
 ## Building
 
 ```bash
-cd zenoh-recorder-example
+cd zenoh-recorder
 cargo build --release
 ```
 
 ## Running
 
+### Option 1: With Configuration File (Recommended)
+
 ```bash
-# Set environment variables (optional)
+# Use default configuration
+./target/release/zenoh-recorder --config config/default.yaml
+
+# Or specify custom config
+./target/release/zenoh-recorder --config my-config.yaml
+
+# Override device ID
+./target/release/zenoh-recorder --config config/default.yaml --device-id robot-042
+```
+
+### Option 2: With Environment Variables
+
+```bash
 export DEVICE_ID="robot_01"
 export REDUCTSTORE_URL="http://localhost:8383"
-export BUCKET_NAME="ros_data"
+export REDUCT_API_TOKEN="optional-token"
 
-# Run the recorder
-cargo run --release
+./target/release/zenoh-recorder --config config/default.yaml
 ```
 
 ## Usage Examples
@@ -151,28 +295,76 @@ echo '{
 
 ## Configuration
 
-### Flush Policies
+### YAML Configuration File
 
-Configurable in code (to be moved to config file):
+Create a `config.yaml` file:
 
-```rust
-let buffer = TopicBuffer::new(
-    topic.clone(),
-    recording_id.clone(),
-    10 * 1024 * 1024,        // 10 MB max buffer size
-    Duration::from_secs(10), // 10 second max duration
-    flush_queue.clone(),
-);
+```yaml
+# Zenoh connection
+zenoh:
+  mode: peer  # peer, client, or router
+  connect:
+    endpoints:
+      - tcp/localhost:7447
+
+# Storage backend selection
+storage:
+  backend: reductstore  # reductstore, filesystem, influxdb, s3
+  reductstore:
+    url: http://localhost:8383
+    bucket_name: zenoh_recordings
+    api_token: ${REDUCT_API_TOKEN}  # Optional
+    timeout_seconds: 300
+    max_retries: 3
+
+# Recorder settings
+recorder:
+  device_id: ${DEVICE_ID:-robot-001}
+  
+  # Flush triggers (NEW!)
+  flush_policy:
+    max_buffer_size_bytes: 10485760      # 10 MB
+    max_buffer_duration_seconds: 10      # 10 seconds
+    min_samples_per_flush: 10
+  
+  # Compression settings (NEW!)
+  compression:
+    default_type: zstd  # none, lz4, zstd
+    default_level: 2    # 0-4
+    
+    # Per-topic overrides (optional)
+    per_topic:
+      "/camera/**":
+        type: lz4
+        level: 1  # Fast compression for high-frequency camera
+      "/lidar/**":
+        type: zstd
+        level: 3  # Better compression for lidar
+  
+  # Worker configuration (NEW!)
+  workers:
+    flush_workers: 4      # Parallel flush operations
+    queue_capacity: 1000  # Task queue size
+  
+  # Control interface
+  control:
+    key_prefix: recorder/control
+    status_key: recorder/status/**
+
+# Logging
+logging:
+  level: info  # trace, debug, info, warn, error
+  format: text
 ```
 
-### Compression Options
+### Configuration Examples
 
-- **Type**: `none`, `lz4`, `zstd`
-- **Level**: 0 (fastest) to 4 (slowest/best compression)
+See `config/examples/` for more examples:
+- `reductstore.yaml` - ReductStore backend
+- `filesystem.yaml` - Filesystem backend
+- `high-performance.yaml` - Optimized for throughput
 
-### Worker Threads
-
-Default: 4 flush worker threads (configurable in `RecorderManager::start_flush_workers`)
+For detailed configuration options, see [config/README.md](config/README.md).
 
 ## ReductStore Data Structure
 
@@ -206,11 +398,77 @@ Bucket: "ros_data"
 
 ## Performance Tuning
 
-1. **Buffer Sizes**: Increase for high-throughput topics
-2. **Flush Duration**: Decrease for lower latency, increase for better batching
-3. **Worker Threads**: Increase for more parallel uploads
-4. **Compression**: Use LZ4 for speed, Zstd for size
-5. **Network**: Use HTTP/2 connection pooling (enabled by default)
+All performance settings are now configurable via YAML:
+
+### High-Throughput Scenario
+
+```yaml
+recorder:
+  flush_policy:
+    max_buffer_size_bytes: 52428800  # 50 MB (larger batches)
+    max_buffer_duration_seconds: 5   # Faster flush
+  compression:
+    default_type: lz4  # Faster compression
+    default_level: 1
+  workers:
+    flush_workers: 8   # More parallelism
+    queue_capacity: 2000
+
+logging:
+  level: warn  # Less overhead
+```
+
+### Low-Latency Scenario
+
+```yaml
+recorder:
+  flush_policy:
+    max_buffer_size_bytes: 1048576   # 1 MB (smaller batches)
+    max_buffer_duration_seconds: 1   # Immediate flush
+  compression:
+    default_type: none  # No compression overhead
+  workers:
+    flush_workers: 2
+```
+
+### Resource-Constrained Devices
+
+```yaml
+recorder:
+  flush_policy:
+    max_buffer_size_bytes: 5242880   # 5 MB
+    max_buffer_duration_seconds: 10
+  compression:
+    default_type: lz4  # Fast compression
+    default_level: 1
+  workers:
+    flush_workers: 2   # Fewer workers
+    queue_capacity: 500
+
+logging:
+  level: warn
+```
+
+### Per-Topic Optimization
+
+```yaml
+recorder:
+  compression:
+    default_type: zstd
+    default_level: 2
+    per_topic:
+      "/camera/**":
+        type: lz4
+        level: 1  # Fast for high-frequency camera
+      "/lidar/**":
+        type: zstd
+        level: 3  # Better compression for lidar
+      "/imu/**":
+        type: none  # No compression for small IMU data
+        level: 0
+```
+
+See `config/examples/high-performance.yaml` for a complete optimized configuration.
 
 ## Testing
 
@@ -242,30 +500,164 @@ curl http://localhost:8383/api/v1/b/ros_data/camera_front
 
 ## Troubleshooting
 
-### No data being recorded
-- Check if topics are being published
-- Verify Zenoh session is connected
+### Configuration Issues
+
+**Config file not found**
+```bash
+# Verify file path
+ls -la config/default.yaml
+
+# Use absolute path
+zenoh-recorder --config /absolute/path/to/config.yaml
+```
+
+**Environment variable not substituted**
+```bash
+# Verify variable is set
+echo $DEVICE_ID
+
+# Correct syntax in config file:
+# ✅ ${DEVICE_ID}
+# ✅ ${DEVICE_ID:-default-value}
+# ❌ $DEVICE_ID (wrong)
+```
+
+**Validation errors**
+```bash
+# Read error message carefully
+zenoh-recorder --config my-config.yaml
+# Error: max_buffer_size_bytes must be > 0
+
+# Fix the invalid value in config file
+```
+
+### No Data Being Recorded
+- Check if topics are being published: `z_pub /test/topic "test data"`
+- Verify Zenoh session is connected (check logs)
 - Check logs for subscription errors
+- Verify recording is started (check status)
 
-### Upload failures
-- Verify ReductStore is running: `curl http://localhost:8383/api/v1/info`
+### Upload Failures
+- Verify backend is running:
+  - ReductStore: `curl http://localhost:8383/api/v1/info`
+  - Filesystem: Check disk space and permissions
 - Check network connectivity
-- Review retry logs
+- Review retry logs (increase log level to `debug`)
+- Check backend authentication (API tokens)
 
-### High memory usage
-- Reduce buffer sizes
-- Decrease flush duration
-- Increase number of flush workers
+### High Memory Usage
+- Reduce `max_buffer_size_bytes` in config
+- Decrease `max_buffer_duration_seconds`
+- Increase `flush_workers` for faster processing
+- Use lighter compression (LZ4 or none)
+- Check for slow backend writes (bottleneck)
+
+### Performance Issues
+- **Slow writes**: Increase `flush_workers`, use LZ4 compression
+- **High CPU**: Reduce compression level, use LZ4 instead of Zstd
+- **Network saturation**: Enable compression, increase buffer size
+- **Disk I/O**: Use SSD, increase worker count
+
+### Debug Mode
+
+Enable detailed logging:
+```yaml
+logging:
+  level: debug  # or trace
+  format: text
+```
+
+Or via environment:
+```bash
+RUST_LOG=zenoh_recorder=debug ./target/release/zenoh-recorder --config config/default.yaml
+```
+
+## Supported Backends
+
+### ✅ ReductStore (Production Ready)
+**Best for**: Time-series data, robotics, IoT
+
+- Time-series optimized storage
+- Built-in retention policies
+- Web UI for data exploration
+- HTTP API for queries
+- Label-based metadata
+
+**Query**: Use ReductStore Web UI at `http://localhost:8383` or HTTP API
+
+### 🔜 Filesystem (Coming Soon)
+**Best for**: Offline recording, edge devices
+
+- Writes MCAP files to local disk
+- No external dependencies
+- Query with MCAP tools or Foxglove Studio
+
+### 🔜 InfluxDB (Coming Soon)
+**Best for**: Metrics, analytics, dashboards
+
+- Time-series database for metrics
+- Grafana integration
+- Powerful query language (InfluxQL)
+
+### 🔜 S3 (Coming Soon)
+**Best for**: Cloud archival, long-term storage
+
+- Serverless cloud storage
+- Query with Athena or S3 Select
+- Cost-effective archival
+
+### 🛠️ Custom Backends
+
+Easy to add! Just implement the `StorageBackend` trait:
+
+```rust
+#[async_trait]
+pub trait StorageBackend: Send + Sync {
+    async fn initialize(&self) -> Result<()>;
+    async fn write_record(...) -> Result<()>;
+    async fn write_with_retry(...) -> Result<()>;
+    async fn health_check(&self) -> Result<bool>;
+    fn backend_type(&self) -> &str;
+}
+```
+
+See [docs/CONFIG_AND_STORAGE_DESIGN.md](docs/CONFIG_AND_STORAGE_DESIGN.md) for details.
+
+### Backend Comparison
+
+| Feature | ReductStore | Filesystem | InfluxDB | S3 |
+|---------|-------------|------------|----------|-----|
+| **Status** | ✅ Ready | 🔜 Soon | 🔜 Soon | 🔜 Soon |
+| **Best For** | Time-series | Edge/Offline | Metrics | Archive |
+| **Query UI** | Web UI | Foxglove | Grafana | Athena |
+| **Setup** | Docker | None | Docker | Cloud |
+| **Retention** | Built-in | Manual | Built-in | Lifecycle |
+| **Cost** | Low | None | Medium | Pay-per-GB |
+| **Latency** | Low | Lowest | Low | High |
+| **Scalability** | High | Limited | High | Unlimited |
+
+## Recent Enhancements
+
+- [x] **YAML configuration system** with environment variables
+- [x] **Multi-backend storage** via trait abstraction
+- [x] **Configurable flush triggers** (size & time)
+- [x] **Per-topic compression** settings
+- [x] **Configurable worker pools**
+- [x] **CLI with config file support**
+- [x] **Comprehensive documentation**
 
 ## Future Enhancements
 
-- [ ] Configuration file support (YAML/JSON)
+- [ ] Filesystem backend implementation
+- [ ] InfluxDB backend implementation
+- [ ] S3 backend implementation
+- [ ] Multi-backend writes (primary + fallback)
 - [ ] Prometheus metrics exporter
 - [ ] Local disk spooling for offline operation
 - [ ] Data replay functionality
-- [ ] Query by time range
 - [ ] Multi-format support (Parquet, Arrow)
 - [ ] Data filtering and downsampling
+- [ ] Hot config reload
 
 ## License
 
@@ -283,10 +675,34 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+## Documentation
+
+- 📖 [Configuration Guide](config/README.md) - Configuration file reference
+- 🏗️ [Design Document](docs/CONFIG_AND_STORAGE_DESIGN.md) - Architecture and design decisions
+- 🔧 [Contributing Guide](docs/CONTRIBUTING.md) - Testing guide
+- 🚀 [CI/CD Documentation](docs/CI_CD.md) - Continuous integration setup
+- 📊 [Recorder Design](docs/RECORDER_DESIGN.md) - Detailed technical design
+
 ## See Also
 
+### Project Resources
+- [Configuration Examples](config/examples/) - Example YAML configs
+- [Docker Compose Example](examples/docker-compose.yml) - Complete deployment example
+
+### External Documentation
 - [Zenoh Documentation](https://zenoh.io/docs/)
 - [ReductStore Documentation](https://www.reduct.store/docs)
 - [MCAP Format](https://mcap.dev/)
-- [Design Document](../RECORDER_DESIGN.md)
+- [Foxglove Studio](https://foxglove.dev/) - MCAP visualization
+
+## Quick Links
+
+| Topic | Link |
+|-------|------|
+| **Getting Started** | See [Prerequisites](#prerequisites) and [Building](#building) |
+| **Configuration** | See [config/README.md](config/README.md) |
+| **Backend Selection** | See [Supported Backends](#supported-backends) |
+| **Performance Tuning** | See [Performance Tuning](#performance-tuning) |
+| **API Reference** | Run `cargo doc --open` |
+| **Design Docs** | See [docs/](docs/) directory |
 

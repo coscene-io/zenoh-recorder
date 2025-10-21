@@ -1,5 +1,17 @@
-# Filesystem Backend Example Configuration
+# Filesystem Backend Configuration (Production Ready)
 # Useful for offline/edge recording scenarios
+#
+# This backend writes MCAP files directly to the local filesystem:
+# - No external dependencies required
+# - Automatic directory organization by entry name
+# - JSON metadata files with labels
+# - Each flush creates a new file: {timestamp}.mcap
+#
+# File structure:
+#   {base_path}/
+#     {entry_name}/
+#       {timestamp_us}.mcap
+#       {timestamp_us}.meta.json
 
 zenoh:
   mode: peer
@@ -10,7 +22,7 @@ zenoh:
 storage:
   backend: filesystem
   filesystem:
-    base_path: /data/recordings
+    base_path: ${DATA_PATH:-/data/recordings}  # Override with DATA_PATH env var
     file_format: mcap
 
 recorder:

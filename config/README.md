@@ -35,16 +35,25 @@ zenoh-recorder --config config/examples/reductstore.yaml
 ```
 
 ### `examples/filesystem.yaml`
-Example configuration for filesystem backend (Phase 3).
+Example configuration for filesystem backend (✅ Production Ready).
 
 **Features**:
 - Writes MCAP files to local filesystem
-- No compression (MCAP already compressed)
+- No external dependencies required
+- Automatic directory organization by entry name
+- JSON metadata files for labels
+- No compression (MCAP already handles compression)
 - Suitable for offline/edge scenarios
 
 **Usage**:
 ```bash
 zenoh-recorder --config config/examples/filesystem.yaml
+```
+
+**Note**: The default path is `/data/recordings`. You can override it with:
+```bash
+export DATA_PATH=/path/to/recordings
+# Or modify the config file directly
 ```
 
 ### `examples/high-performance.yaml`
@@ -82,13 +91,20 @@ zenoh:
 ### Storage Section
 ```yaml
 storage:
-  backend: reductstore  # reductstore, filesystem, influxdb, s3
+  backend: reductstore  # reductstore, filesystem (influxdb, s3 coming soon)
+  
+  # ReductStore backend (time-series database)
   reductstore:
     url: http://localhost:8383
     bucket_name: zenoh_recordings
     api_token: ${REDUCT_API_TOKEN}  # Optional, from env var
     timeout_seconds: 300
     max_retries: 3
+  
+  # Filesystem backend (local MCAP files)
+  filesystem:
+    base_path: /data/recordings
+    file_format: mcap
 ```
 
 ### Recorder Section
@@ -185,6 +201,34 @@ export REDUCTSTORE_URL=http://production:8383
 # Run with environment variable substitution
 zenoh-recorder --config config/default.yaml
 ```
+
+---
+
+## Backend Selection Guide
+
+### When to Use ReductStore
+✅ **Best for**: Time-series data, cloud/server deployments, IoT platforms
+
+**Advantages**:
+- Built-in retention policies
+- Web UI for data exploration
+- HTTP API for queries
+- Label-based metadata search
+- Optimized for time-series queries
+
+**Setup**: Requires Docker or ReductStore server
+
+### When to Use Filesystem
+✅ **Best for**: Edge devices, offline scenarios, simple setups
+
+**Advantages**:
+- No external dependencies
+- Works offline
+- Simple file-based storage
+- Easy to backup/transfer
+- Compatible with MCAP tools (Foxglove Studio)
+
+**Setup**: Just specify a directory path
 
 ---
 

@@ -61,29 +61,29 @@ jobs:
       
       - name: Build release binary
         run: |
-          cd zenoh-recorder-example
+          cd zenoh-recorder
           cargo build --release --target ${{ matrix.target }}
       
       - name: Strip binary (Linux)
         if: runner.os == 'Linux'
         run: |
-          strip zenoh-recorder-example/target/${{ matrix.target }}/release/zenoh-recorder
+          strip zenoh-recorder/target/${{ matrix.target }}/release/zenoh-recorder
       
       - name: Strip binary (macOS)
         if: runner.os == 'macOS'
         run: |
-          strip zenoh-recorder-example/target/${{ matrix.target }}/release/zenoh-recorder
+          strip zenoh-recorder/target/${{ matrix.target }}/release/zenoh-recorder
       
       - name: Package binary
         run: |
-          cd zenoh-recorder-example/target/${{ matrix.target }}/release
+          cd zenoh-recorder/target/${{ matrix.target }}/release
           tar czf ${{ matrix.artifact_name }}.tar.gz zenoh-recorder
       
       - name: Upload binary to release
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.artifact_name }}
-          path: zenoh-recorder-example/target/${{ matrix.target }}/release/${{ matrix.artifact_name }}.tar.gz
+          path: zenoh-recorder/target/${{ matrix.target }}/release/${{ matrix.artifact_name }}.tar.gz
 
   publish-docker:
     name: Publish Docker Image
@@ -108,7 +108,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./zenoh-recorder-example
+          context: ./zenoh-recorder
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/zenoh-recorder:latest

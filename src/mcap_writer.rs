@@ -37,6 +37,7 @@ use tracing::debug;
 use zenoh::prelude::SplitBuffer;
 use zenoh::sample::Sample;
 
+use crate::config::SchemaConfig;
 use crate::protocol::{CompressionLevel, CompressionType};
 
 /// MCAP writer that serializes Zenoh samples into compressed protobuf format
@@ -59,6 +60,7 @@ use crate::protocol::{CompressionLevel, CompressionType};
 pub struct McapSerializer {
     compression_type: CompressionType,
     compression_level: CompressionLevel,
+    schema_config: SchemaConfig,
 }
 
 impl McapSerializer {
@@ -78,7 +80,46 @@ impl McapSerializer {
         Self {
             compression_type,
             compression_level,
+            schema_config: SchemaConfig::default(),
         }
+    }
+    
+    /// Create a new MCAP serializer with schema configuration
+    pub fn with_schema_config(
+        compression_type: CompressionType,
+        compression_level: CompressionLevel,
+        schema_config: SchemaConfig,
+    ) -> Self {
+        Self {
+            compression_type,
+            compression_level,
+            schema_config,
+        }
+    }
+    
+    /// Get schema info for a topic
+    fn get_schema_info(&self, topic: &str) -> Option<crate::proto::SchemaInfo> {
+        if !self.schema_config.include_metadata {
+            return None;
+        }
+        
+        // Check per-topic schema config
+        if let Some(topic_schema) = self.schema_config.per_topic.get(topic) {
+            return Some(crate::proto::SchemaInfo {
+                format: topic_schema.format.clone(),
+                schema_name: topic_schema.schema_name.clone().unwrap_or_default(),
+                schema_hash: topic_schema.schema_hash.clone().unwrap_or_default(),
+                schema_data: vec![],
+            });
+        }
+        
+        // Use default format if metadata is enabled
+        Some(crate::proto::SchemaInfo {
+            format: self.schema_config.default_format.clone(),
+            schema_name: String::new(),
+            schema_hash: String::new(),
+            schema_data: vec![],
+        })
     }
 
     /// Serialize a batch of samples to protobuf-encoded format
@@ -137,16 +178,17 @@ impl McapSerializer {
                         .as_nanos() as u64
                 });
 
-            // Create protobuf message from sample
-            let sensor_msg = crate::proto::SensorData {
+            // Create generic protobuf message from sample (schema-agnostic)
+            let schema_info = self.get_schema_info(topic);
+            let recorded_msg = crate::proto::RecordedMessage {
                 topic: topic.to_string(),
                 timestamp_ns: timestamp as i64,
-                frame_id: sample.key_expr.as_str().to_string(),
                 payload: sample.payload.contiguous().to_vec(),
+                schema: schema_info,
             };
 
             let mut msg_data = Vec::new();
-            sensor_msg
+            recorded_msg
                 .encode(&mut msg_data)
                 .context("Failed to encode protobuf message")?;
 

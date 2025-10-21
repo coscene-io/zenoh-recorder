@@ -16,6 +16,7 @@ A high-performance, write-only data recorder for Zenoh middleware with **multi-b
 - [Running](#running)
 - [Usage Examples](#usage-examples)
 - [Configuration](#configuration)
+- [Custom Proto Definitions](#custom-proto-definitions)
 - [Supported Backends](#supported-backends)
 - [Performance Tuning](#performance-tuning)
 - [Troubleshooting](#troubleshooting)
@@ -27,7 +28,8 @@ A high-performance, write-only data recorder for Zenoh middleware with **multi-b
 The Zenoh Recorder is a lightweight agent that:
 - 📊 Records multi-topic data streams from Zenoh
 - ⚙️ **Configurable flush triggers** (size & time based)
-- 📦 Serializes to MCAP format with protobuf messages
+- 📦 Serializes to MCAP format (schema-agnostic)
+- 🎨 **Custom proto support** - use ANY serialization format (protobuf, JSON, msgpack, etc.)
 - 🔌 **Supports multiple storage backends** (ReductStore, Filesystem, InfluxDB, S3)
 - 🎯 **YAML configuration** with environment variable support
 - 🚀 High-performance with **configurable worker pools**
@@ -39,7 +41,9 @@ The Zenoh Recorder is a lightweight agent that:
 This release introduces a complete configuration and multi-backend storage system:
 
 - ✅ **YAML Configuration**: All settings externalized to config files
-- ✅ **Multi-Backend Support**: Trait-based storage abstraction
+- ✅ **Multi-Backend Support**: Trait-based storage abstraction (ReductStore, Filesystem)
+- ✅ **Custom Proto Support**: Schema-agnostic recording - use ANY serialization format
+- ✅ **Schema Metadata**: Optional per-topic schema information
 - ✅ **Flexible Flush Policies**: Configure size and time triggers
 - ✅ **Per-Topic Compression**: Optimize compression per data type
 - ✅ **Worker Pools**: Configurable parallelism
@@ -365,6 +369,234 @@ See `config/examples/` for more examples:
 - `high-performance.yaml` - Optimized for throughput
 
 For detailed configuration options, see [config/README.md](config/README.md).
+
+## Custom Proto Definitions
+
+The recorder is **schema-agnostic** - it stores raw Zenoh payloads without making assumptions about the serialization format. This means you can use **your own protobuf definitions** (or any serialization format) without recompiling the recorder.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Your Application (Publisher)                                │
+│                                                               │
+│  1. Define your own proto:                                   │
+│     message MyCustomMessage {                                │
+│       string sensor_id = 1;                                  │
+│       double temperature = 2;                                │
+│     }                                                         │
+│                                                               │
+│  2. Serialize it yourself:                                   │
+│     let data = MyCustomMessage { ... };                      │
+│     let bytes = data.encode_to_vec();                        │
+│                                                               │
+│  3. Publish to Zenoh:                                        │
+│     session.put("/sensors/temp", bytes).await;               │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Zenoh Recorder (Storage)                                    │
+│                                                               │
+│  - Stores raw bytes (no deserialization)                     │
+│  - Optionally adds schema metadata                           │
+│  - Works with ANY serialization format                       │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  Your Application (Consumer)                                 │
+│                                                               │
+│  1. Query data from storage backend                          │
+│  2. Deserialize with your proto:                             │
+│     let data = storage.get(...);                             │
+│     let msg = MyCustomMessage::decode(data.payload);         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Example: Using Custom Proto
+
+**Step 1: Define your proto** (in your application)
+
+```rust
+// In your own crate - NOT in the recorder
+#[derive(Clone, prost::Message)]
+pub struct MyCustomMessage {
+    #[prost(string, tag = "1")]
+    pub sensor_id: String,
+    
+    #[prost(double, tag = "2")]
+    pub temperature: f64,
+    
+    #[prost(int64, tag = "3")]
+    pub timestamp_ms: i64,
+}
+```
+
+**Step 2: Publish your data**
+
+```rust
+use zenoh::prelude::*;
+use prost::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create your custom message
+    let my_data = MyCustomMessage {
+        sensor_id: "DHT22-001".to_string(),
+        temperature: 23.5,
+        timestamp_ms: chrono::Utc::now().timestamp_millis(),
+    };
+    
+    // Serialize it yourself
+    let bytes = my_data.encode_to_vec();
+    
+    // Publish to Zenoh
+    let session = zenoh::open(config::default()).res().await?;
+    session.put("/sensors/temperature", bytes).res().await?;
+    
+    Ok(())
+}
+```
+
+**Step 3: Configure recorder with schema metadata** (optional)
+
+```yaml
+# config.yaml
+recorder:
+  schema:
+    # Enable schema metadata in recordings
+    include_metadata: true
+    
+    # Specify schema info per topic
+    per_topic:
+      "/sensors/temperature":
+        format: protobuf
+        schema_name: my_package.MyCustomMessage
+        schema_hash: v1.0.0  # Optional version
+```
+
+**Step 4: Query and deserialize**
+
+```rust
+// Later, when reading the data
+use prost::Message;
+
+// Get data from storage (e.g., ReductStore, filesystem)
+let recorded_data = storage.get("/sensors/temperature").await?;
+
+// Deserialize with YOUR proto definition
+let my_msg = MyCustomMessage::decode(recorded_data.payload.as_slice())?;
+
+println!("Sensor: {}, Temp: {}", my_msg.sensor_id, my_msg.temperature);
+```
+
+### Supported Serialization Formats
+
+The recorder is format-agnostic and supports:
+
+| Format | Description | Use Case |
+|--------|-------------|----------|
+| **Protobuf** | Binary, schema-based | Recommended for structured data |
+| **JSON** | Text, human-readable | Easy debugging, web APIs |
+| **MessagePack** | Binary, schemaless | Compact, dynamic data |
+| **FlatBuffers** | Zero-copy binary | Ultra-low latency |
+| **Raw Binary** | Custom formats | Full control |
+| **CBOR** | Binary JSON alternative | IoT devices |
+
+**Example: Using JSON**
+
+```rust
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+struct SensorData {
+    sensor_id: String,
+    temperature: f64,
+}
+
+// Publish
+let data = SensorData { sensor_id: "S001".into(), temperature: 25.3 };
+let json = serde_json::to_vec(&data)?;
+session.put("/sensors/temp", json).await?;
+
+// Configure schema metadata
+// per_topic:
+//   "/sensors/temp":
+//     format: json
+//     schema_name: SensorData
+```
+
+### Schema Metadata Benefits
+
+When you enable schema metadata, the recorder stores additional information:
+
+```yaml
+schema:
+  include_metadata: true
+  per_topic:
+    "/camera/image":
+      format: protobuf
+      schema_name: sensor_msgs.Image
+      schema_hash: a1b2c3d4e5f6  # SHA hash of .proto file
+```
+
+**Benefits:**
+- ✅ **Documentation** - Know what format each topic uses
+- ✅ **Versioning** - Track schema changes via hash
+- ✅ **Validation** - Verify data compatibility
+- ✅ **Tooling** - Auto-generate deserializers
+
+**Stored metadata:**
+```json
+{
+  "topic": "/camera/image",
+  "timestamp_ns": 1234567890,
+  "payload": "<raw bytes>",
+  "schema": {
+    "format": "protobuf",
+    "schema_name": "sensor_msgs.Image",
+    "schema_hash": "a1b2c3d4e5f6"
+  }
+}
+```
+
+### Example Configurations
+
+**Minimal (no schema metadata):**
+```yaml
+recorder:
+  schema:
+    default_format: raw
+    include_metadata: false  # Default
+```
+
+**With schema metadata:**
+```yaml
+recorder:
+  schema:
+    default_format: protobuf
+    include_metadata: true
+    per_topic:
+      "/camera/**":
+        format: protobuf
+        schema_name: sensor_msgs.Image
+      "/telemetry/**":
+        format: json
+```
+
+See [config/examples/schema-enabled.yaml](config/examples/schema-enabled.yaml) for a complete example.
+
+### Key Advantages
+
+✅ **No recompilation** - Recorder doesn't need to know your proto definitions  
+✅ **Any format** - Protobuf, JSON, msgpack, custom binary, etc.  
+✅ **Flexibility** - Change schemas without updating recorder  
+✅ **User control** - You manage serialization in your application  
+✅ **Backward compatible** - Existing workflows continue to work  
+✅ **Performance** - Zero overhead from schema inspection  
+
+### Example Code
+
+See [examples/custom_proto_usage.rs](examples/custom_proto_usage.rs) for a complete working example.
 
 ## ReductStore Data Structure
 

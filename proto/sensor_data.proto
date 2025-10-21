@@ -2,7 +2,24 @@ syntax = "proto3";
 
 package sensor_data;
 
-// Generic sensor message for demonstration
+// Generic recorded message - schema-agnostic
+// Stores raw Zenoh payload with optional schema metadata
+message RecordedMessage {
+    string topic = 1;
+    int64 timestamp_ns = 2;
+    bytes payload = 3;  // Raw Zenoh payload (any format)
+    SchemaInfo schema = 4;  // Optional schema metadata
+}
+
+// Schema metadata for recorded messages
+message SchemaInfo {
+    string format = 1;       // "protobuf", "json", "msgpack", "raw", etc.
+    string schema_name = 2;  // Message type name (e.g., "sensor_msgs/Image")
+    string schema_hash = 3;  // Optional: schema version hash (MD5/SHA256)
+    bytes schema_data = 4;   // Optional: embedded schema definition
+}
+
+// Deprecated: Legacy sensor message for backward compatibility
 message SensorData {
     string topic = 1;
     int64 timestamp_ns = 2;

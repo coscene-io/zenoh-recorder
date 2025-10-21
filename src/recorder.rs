@@ -366,13 +366,19 @@ impl RecorderManager {
             let flush_queue = self.flush_queue.clone();
             let storage_backend = self.storage_backend.clone();
             let sessions = self.sessions.clone();
+            let schema_config = self.config.recorder.schema.clone();
 
             tokio::spawn(async move {
                 debug!("Flush worker {} started", i);
                 loop {
                     if let Some(task) = flush_queue.pop() {
-                        Self::process_flush_task(task, storage_backend.clone(), sessions.clone())
-                            .await;
+                        Self::process_flush_task(
+                            task,
+                            storage_backend.clone(),
+                            sessions.clone(),
+                            schema_config.clone(),
+                        )
+                        .await;
                     } else {
                         tokio::time::sleep(Duration::from_millis(100)).await;
                     }
@@ -386,6 +392,7 @@ impl RecorderManager {
         task: FlushTask,
         storage_backend: Arc<dyn StorageBackend>,
         sessions: Arc<DashMap<String, Arc<RecordingSession>>>,
+        schema_config: crate::config::SchemaConfig,
     ) {
         debug!(
             "Processing flush task for topic '{}' ({} samples)",
@@ -405,7 +412,11 @@ impl RecorderManager {
         };
 
         // Serialize to MCAP
-        let serializer = McapSerializer::new(session.compression_type, session.compression_level);
+        let serializer = McapSerializer::with_schema_config(
+            session.compression_type,
+            session.compression_level,
+            schema_config,
+        );
         let mcap_data =
             match serializer.serialize_batch(&task.topic, task.samples, &task.recording_id) {
                 Ok(data) => data,

@@ -185,6 +185,8 @@ pub struct RecorderSettings {
     pub workers: WorkerConfig,
     #[serde(default)]
     pub control: ControlConfig,
+    #[serde(default)]
+    pub schema: SchemaConfig,
 }
 
 impl Default for RecorderSettings {
@@ -195,6 +197,7 @@ impl Default for RecorderSettings {
             compression: CompressionConfig::default(),
             workers: WorkerConfig::default(),
             control: ControlConfig::default(),
+            schema: SchemaConfig::default(),
         }
     }
 }
@@ -251,6 +254,40 @@ impl Default for CompressionConfig {
 pub struct TopicCompression {
     pub r#type: String,
     pub level: u8,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SchemaConfig {
+    /// Default format for messages without explicit schema
+    #[serde(default = "default_schema_format")]
+    pub default_format: String,  // "raw", "protobuf", "json", etc.
+    
+    /// Whether to include schema metadata in recordings
+    #[serde(default)]
+    pub include_metadata: bool,
+    
+    /// Per-topic schema information
+    #[serde(default)]
+    pub per_topic: HashMap<String, TopicSchemaInfo>,
+}
+
+impl Default for SchemaConfig {
+    fn default() -> Self {
+        Self {
+            default_format: default_schema_format(),
+            include_metadata: false,
+            per_topic: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TopicSchemaInfo {
+    pub format: String,              // "protobuf", "json", "msgpack", "raw"
+    #[serde(default)]
+    pub schema_name: Option<String>, // e.g., "sensor_msgs/Image"
+    #[serde(default)]
+    pub schema_hash: Option<String>, // Optional version hash
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -324,4 +361,5 @@ fn default_control_timeout() -> u64 { 30 }
 fn default_log_level() -> String { "info".to_string() }
 fn default_log_format() -> String { "text".to_string() }
 fn default_file_format() -> String { "mcap".to_string() }
+fn default_schema_format() -> String { "raw".to_string() }
 

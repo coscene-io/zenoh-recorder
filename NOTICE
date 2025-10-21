@@ -1,0 +1,23 @@
+Zenoh Recorder
+Copyright 2025 coScene
+
+This product includes software developed at coScene (https://www.coscene.io/).
+
+This software contains code derived from and/or depends on the following projects:
+
+Zenoh
+  - License: Apache-2.0 OR EPL-2.0
+  - Homepage: https://zenoh.io/
+  - Copyright: Eclipse Foundation
+
+ReductStore (used as backend)
+  - License: Business Source License 1.1
+  - Homepage: https://www.reduct.store/
+
+MCAP
+  - License: MIT
+  - Homepage: https://mcap.dev/
+  - Copyright: Foxglove Technologies
+
+For full license texts and attributions, see the respective project repositories.
+

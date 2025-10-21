@@ -4,6 +4,12 @@
 name = "zenoh-recorder"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+authors = ["coScene"]
+description = "High-performance Zenoh data recorder with multi-backend storage support"
+repository = "https://github.com/coscene-io/zenoh-recorder"
+keywords = ["zenoh", "recorder", "mcap", "reductstore", "time-series"]
+categories = ["development-tools", "network-programming"]
 
 [dependencies]
 zenoh = "0.11"

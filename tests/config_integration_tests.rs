@@ -20,7 +20,7 @@ use zenoh_recorder::config::{load_config, RecorderConfig};
 
 #[test]
 fn test_load_default_config() {
-    let config_path = PathBuf::from("config/default.yaml");
+    let config_path = PathBuf::from("config/default.toml");
 
     if config_path.exists() {
         let result = load_config(&config_path);
@@ -46,37 +46,41 @@ fn test_load_default_config() {
 fn test_config_with_env_vars() {
     // Create temporary config file
     let temp_config = r#"
-zenoh:
-  mode: peer
+[zenoh]
+mode = "peer"
 
-storage:
-  backend: reductstore
-  reductstore:
-    url: ${TEST_URL:-http://default:8383}
-    bucket_name: ${TEST_BUCKET:-default_bucket}
-    api_token: ${TEST_TOKEN}
-    timeout_seconds: 300
-    max_retries: 3
+[storage]
+backend = "reductstore"
 
-recorder:
-  device_id: ${DEVICE_ID:-test-device}
-  flush_policy:
-    max_buffer_size_bytes: 1048576
-    max_buffer_duration_seconds: 5
-    min_samples_per_flush: 10
-  compression:
-    default_type: zstd
-    default_level: 2
-  workers:
-    flush_workers: 2
-    queue_capacity: 500
+[storage.reductstore]
+url = "${TEST_URL:-http://default:8383}"
+bucket_name = "${TEST_BUCKET:-default_bucket}"
+api_token = "${TEST_TOKEN}"
+timeout_seconds = 300
+max_retries = 3
 
-logging:
-  level: debug
-  format: text
+[recorder]
+device_id = "${DEVICE_ID:-test-device}"
+
+[recorder.flush_policy]
+max_buffer_size_bytes = 1048576
+max_buffer_duration_seconds = 5
+min_samples_per_flush = 10
+
+[recorder.compression]
+default_type = "zstd"
+default_level = 2
+
+[recorder.workers]
+flush_workers = 2
+queue_capacity = 500
+
+[logging]
+level = "debug"
+format = "text"
 "#;
 
-    let temp_path = PathBuf::from("/tmp/test_config.yaml");
+    let temp_path = PathBuf::from("/tmp/test_config.toml");
     fs::write(&temp_path, temp_config).expect("Failed to write temp config");
 
     // Set environment variable
@@ -113,35 +117,39 @@ logging:
 #[test]
 fn test_config_validation() {
     let invalid_config = r#"
-zenoh:
-  mode: peer
+[zenoh]
+mode = "peer"
 
-storage:
-  backend: reductstore
-  reductstore:
-    url: http://localhost:8383
-    bucket_name: test
-    timeout_seconds: 300
-    max_retries: 3
+[storage]
+backend = "reductstore"
 
-recorder:
-  device_id: test
-  flush_policy:
-    max_buffer_size_bytes: 0  # INVALID: must be > 0
-    max_buffer_duration_seconds: 10
-  compression:
-    default_type: zstd
-    default_level: 2
-  workers:
-    flush_workers: 4
-    queue_capacity: 1000
+[storage.reductstore]
+url = "http://localhost:8383"
+bucket_name = "test"
+timeout_seconds = 300
+max_retries = 3
 
-logging:
-  level: info
-  format: text
+[recorder]
+device_id = "test"
+
+[recorder.flush_policy]
+max_buffer_size_bytes = 0  # INVALID: must be > 0
+max_buffer_duration_seconds = 10
+
+[recorder.compression]
+default_type = "zstd"
+default_level = 2
+
+[recorder.workers]
+flush_workers = 4
+queue_capacity = 1000
+
+[logging]
+level = "info"
+format = "text"
 "#;
 
-    let temp_path = PathBuf::from("/tmp/invalid_config.yaml");
+    let temp_path = PathBuf::from("/tmp/invalid_config.toml");
     fs::write(&temp_path, invalid_config).expect("Failed to write temp config");
 
     let result = load_config(&temp_path);

@@ -39,7 +39,7 @@ use storage::BackendFactory;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Path to configuration file
-    #[arg(short, long, default_value = "config/default.yaml")]
+    #[arg(short, long, default_value = "config/default.toml")]
     config: PathBuf,
 
     /// Device ID (overrides config file)

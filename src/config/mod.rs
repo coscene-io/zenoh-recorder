@@ -15,7 +15,7 @@
 // Configuration module for zenoh-recorder
 //
 // Provides:
-// - YAML configuration file loading
+// - TOML configuration file loading
 // - Environment variable substitution
 // - Configuration validation
 // - Default values
@@ -29,7 +29,7 @@ pub use types::*;
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Load configuration from a YAML file
+/// Load configuration from a TOML file
 pub fn load_config<P: AsRef<Path>>(path: P) -> Result<RecorderConfig> {
     ConfigLoader::load(path).context("Failed to load configuration")
 }

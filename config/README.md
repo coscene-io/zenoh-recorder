@@ -4,7 +4,7 @@ This directory contains configuration files for the zenoh-recorder application.
 
 ## Configuration Files
 
-### `default.yaml`
+### `default.toml`
 The default configuration file with standard settings suitable for most use cases.
 
 **Features**:
@@ -16,10 +16,10 @@ The default configuration file with standard settings suitable for most use case
 
 **Usage**:
 ```bash
-zenoh-recorder --config config/default.yaml
+zenoh-recorder --config config/default.toml
 ```
 
-### `examples/reductstore.yaml`
+### `examples/reductstore.toml`
 Example configuration for ReductStore backend with environment variable support.
 
 **Features**:
@@ -31,10 +31,10 @@ Example configuration for ReductStore backend with environment variable support.
 ```bash
 export REDUCTSTORE_URL=http://production:8383
 export REDUCT_API_TOKEN=your-token-here
-zenoh-recorder --config config/examples/reductstore.yaml
+zenoh-recorder --config config/examples/reductstore.toml
 ```
 
-### `examples/filesystem.yaml`
+### `examples/filesystem.toml`
 Example configuration for filesystem backend (✅ Production Ready).
 
 **Features**:
@@ -47,7 +47,7 @@ Example configuration for filesystem backend (✅ Production Ready).
 
 **Usage**:
 ```bash
-zenoh-recorder --config config/examples/filesystem.yaml
+zenoh-recorder --config config/examples/filesystem.toml
 ```
 
 **Note**: The default path is `/data/recordings`. You can override it with:
@@ -56,7 +56,7 @@ export DATA_PATH=/path/to/recordings
 # Or modify the config file directly
 ```
 
-### `examples/high-performance.yaml`
+### `examples/high-performance.toml`
 Optimized configuration for high-throughput recording scenarios.
 
 **Features**:
@@ -69,7 +69,7 @@ Optimized configuration for high-throughput recording scenarios.
 
 **Usage**:
 ```bash
-zenoh-recorder --config config/examples/high-performance.yaml
+zenoh-recorder --config config/examples/high-performance.toml
 ```
 
 ---
@@ -77,76 +77,80 @@ zenoh-recorder --config config/examples/high-performance.yaml
 ## Configuration Structure
 
 ### Zenoh Section
-```yaml
-zenoh:
-  mode: peer  # peer, client, or router
-  connect:
-    endpoints:
-      - tcp/localhost:7447
-  listen:
-    endpoints:
-      - tcp/0.0.0.0:17447  # Optional
+```toml
+[zenoh]
+mode = "peer"  # peer, client, or router
+
+[zenoh.connect]
+endpoints = [
+    "tcp/localhost:7447"
+]
+
+[zenoh.listen]
+endpoints = [
+    "tcp/0.0.0.0:17447"  # Optional
+]
 ```
 
 ### Storage Section
-```yaml
-storage:
-  backend: reductstore  # reductstore, filesystem (influxdb, s3 coming soon)
-  
-  # ReductStore backend (time-series database)
-  reductstore:
-    url: http://localhost:8383
-    bucket_name: zenoh_recordings
-    api_token: ${REDUCT_API_TOKEN}  # Optional, from env var
-    timeout_seconds: 300
-    max_retries: 3
-  
-  # Filesystem backend (local MCAP files)
-  filesystem:
-    base_path: /data/recordings
-    file_format: mcap
+```toml
+[storage]
+backend = "reductstore"  # reductstore, filesystem (influxdb, s3 coming soon)
+
+# ReductStore backend (time-series database)
+[storage.reductstore]
+url = "http://localhost:8383"
+bucket_name = "zenoh_recordings"
+api_token = "${REDUCT_API_TOKEN}"  # Optional, from env var
+timeout_seconds = 300
+max_retries = 3
+
+# Filesystem backend (local MCAP files)
+[storage.filesystem]
+base_path = "/data/recordings"
+file_format = "mcap"
 ```
 
 ### Recorder Section
-```yaml
-recorder:
-  device_id: ${DEVICE_ID:-recorder-001}
-  
-  # Flush triggers
-  flush_policy:
-    max_buffer_size_bytes: 10485760      # 10 MB
-    max_buffer_duration_seconds: 10      # 10 seconds
-    min_samples_per_flush: 10
-  
-  # Compression settings
-  compression:
-    default_type: zstd  # none, lz4, zstd
-    default_level: 2    # 0-4 (fastest to slowest)
-    
-    # Per-topic overrides (optional)
-    per_topic:
-      "/camera/**":
-        type: lz4
-        level: 1
-      "/lidar/**":
-        type: zstd
-        level: 3
-  
-  # Worker pool
-  workers:
-    flush_workers: 4      # Concurrent flush operations
-    queue_capacity: 1000  # Max pending tasks
-  
-  # Control interface
-  control:
-    key_prefix: recorder/control
-    status_key: recorder/status/**
-    timeout_seconds: 30
+```toml
+[recorder]
+device_id = "${DEVICE_ID:-recorder-001}"
+
+# Flush triggers
+[recorder.flush_policy]
+max_buffer_size_bytes = 10485760      # 10 MB
+max_buffer_duration_seconds = 10      # 10 seconds
+min_samples_per_flush = 10
+
+# Compression settings
+[recorder.compression]
+default_type = "zstd"  # none, lz4, zstd
+default_level = 2      # 0-4 (fastest to slowest)
+
+# Per-topic overrides (optional)
+[recorder.compression.per_topic."/camera/**"]
+type = "lz4"
+level = 1
+
+[recorder.compression.per_topic."/lidar/**"]
+type = "zstd"
+level = 3
+
+# Worker pool
+[recorder.workers]
+flush_workers = 4       # Concurrent flush operations
+queue_capacity = 1000   # Max pending tasks
+
+# Control interface
+[recorder.control]
+key_prefix = "recorder/control"
+status_key = "recorder/status/**"
+timeout_seconds = 30
 
 # Logging
-logging:
-  level: info  # trace, debug, info, warn, error
-  format: text  # text, json
+[logging]
+level = "info"  # trace, debug, info, warn, error
+format = "text"  # text, json
 ```
 
 ---
@@ -156,12 +160,12 @@ logging:
 All configuration values support environment variable substitution:
 
 ### Syntax
-```yaml
+```toml
 # Simple substitution
-device_id: ${DEVICE_ID}
+device_id = "${DEVICE_ID}"
 
 # With default value
-device_id: ${DEVICE_ID:-robot-001}
+device_id = "${DEVICE_ID:-robot-001}"
 ```
 
 ### Common Environment Variables
@@ -177,19 +181,19 @@ device_id: ${DEVICE_ID:-robot-001}
 ### 1. Copy and Modify
 ```bash
 # Copy default config
-cp config/default.yaml my-config.yaml
+cp config/default.toml my-config.toml
 
 # Edit with your settings
-vim my-config.yaml
+vim my-config.toml
 
 # Run with custom config
-zenoh-recorder --config my-config.yaml
+zenoh-recorder --config my-config.toml
 ```
 
 ### 2. Override Specific Values
 ```bash
 # Use default config but override device ID
-zenoh-recorder --config config/default.yaml --device-id robot-042
+zenoh-recorder --config config/default.toml --device-id robot-042
 ```
 
 ### 3. Use Environment Variables
@@ -199,7 +203,7 @@ export DEVICE_ID=robot-123
 export REDUCTSTORE_URL=http://production:8383
 
 # Run with environment variable substitution
-zenoh-recorder --config config/default.yaml
+zenoh-recorder --config config/default.toml
 ```
 
 ---
@@ -273,23 +277,22 @@ Configurations are validated on load. Common validation rules:
 
 Optimize compression based on data characteristics:
 
-```yaml
-per_topic:
-  "/camera/**":
-    type: lz4
-    level: 1  # Fast for high-frequency camera data
-  
-  "/lidar/**":
-    type: zstd
-    level: 3  # Better compression for lidar
-  
-  "/imu/**":
-    type: none
-    level: 0  # No compression for small IMU data
-  
-  "/logs/**":
-    type: zstd
-    level: 4  # Maximum compression for text logs
+```toml
+[recorder.compression.per_topic."/camera/**"]
+type = "lz4"
+level = 1  # Fast for high-frequency camera data
+
+[recorder.compression.per_topic."/lidar/**"]
+type = "zstd"
+level = 3  # Better compression for lidar
+
+[recorder.compression.per_topic."/imu/**"]
+type = "none"
+level = 0  # No compression for small IMU data
+
+[recorder.compression.per_topic."/logs/**"]
+type = "zstd"
+level = 4  # Maximum compression for text logs
 ```
 
 ---
@@ -299,10 +302,10 @@ per_topic:
 ### Config file not found
 ```bash
 # Check file path
-ls -la config/default.yaml
+ls -la config/default.toml
 
 # Use absolute path
-zenoh-recorder --config /absolute/path/to/config.yaml
+zenoh-recorder --config /absolute/path/to/config.toml
 ```
 
 ### Environment variable not substituted
@@ -311,15 +314,15 @@ zenoh-recorder --config /absolute/path/to/config.yaml
 echo $DEVICE_ID
 
 # Check syntax in config file
-# Correct: ${DEVICE_ID}
-# Correct: ${DEVICE_ID:-default}
+# Correct: "${DEVICE_ID}"
+# Correct: "${DEVICE_ID:-default}"
 # Incorrect: $DEVICE_ID
 ```
 
 ### Validation errors
 ```bash
 # Read error message carefully
-zenoh-recorder --config my-config.yaml
+zenoh-recorder --config my-config.toml
 # Error: max_buffer_size_bytes must be > 0
 
 # Fix the invalid value in config file
@@ -336,6 +339,6 @@ For more information:
 
 ---
 
-**Quick Start**: Use `config/default.yaml` for getting started, then customize as needed!
+**Quick Start**: Use `config/default.toml` for getting started, then customize as needed!
 
 

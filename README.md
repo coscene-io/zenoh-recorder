@@ -31,7 +31,7 @@ The Zenoh Recorder is a lightweight agent that:
 - 📦 Serializes to MCAP format (schema-agnostic)
 - 🎨 **Custom proto support** - use ANY serialization format (protobuf, JSON, msgpack, etc.)
 - 🔌 **Supports multiple storage backends** (ReductStore, Filesystem, InfluxDB, S3)
-- 🎯 **YAML configuration** with environment variable support
+- 🎯 **TOML configuration** with environment variable support
 - 🚀 High-performance with **configurable worker pools**
 - 🎛️ Distributed recording control via request-response protocol
 - 🔄 Automatic retry logic with exponential backoff
@@ -40,7 +40,7 @@ The Zenoh Recorder is a lightweight agent that:
 
 This release introduces a complete configuration and multi-backend storage system:
 
-- ✅ **YAML Configuration**: All settings externalized to config files
+- ✅ **TOML Configuration**: All settings externalized to config files
 - ✅ **Multi-Backend Support**: Trait-based storage abstraction (ReductStore, Filesystem)
 - ✅ **Custom Proto Support**: Schema-agnostic recording - use ANY serialization format
 - ✅ **Schema Metadata**: Optional per-topic schema information
@@ -71,7 +71,7 @@ docker run -d -p 7447:7447 eclipse/zenoh:latest
 docker run -d -p 8383:8383 reduct/store:latest
 
 # 5. Run recorder with default config
-./target/release/zenoh-recorder --config config/default.yaml
+./target/release/zenoh-recorder --config config/default.toml
 
 # 6. Start a recording (in another terminal)
 echo '{
@@ -101,7 +101,7 @@ For a complete deployment example, see `examples/docker-compose.yml`.
 - **Retry Logic**: Automatic retry with exponential backoff
 
 ### 🆕 Configuration System
-- **YAML Configuration**: Externalized configuration files
+- **TOML Configuration**: Externalized configuration files
 - **Environment Variables**: `${VAR}` and `${VAR:-default}` substitution
 - **CLI Arguments**: Override config values via command line
 - **Validation**: Automatic config validation on startup
@@ -228,13 +228,13 @@ cargo build --release
 
 ```bash
 # Use default configuration
-./target/release/zenoh-recorder --config config/default.yaml
+./target/release/zenoh-recorder --config config/default.toml
 
 # Or specify custom config
-./target/release/zenoh-recorder --config my-config.yaml
+./target/release/zenoh-recorder --config my-config.toml
 
 # Override device ID
-./target/release/zenoh-recorder --config config/default.yaml --device-id robot-042
+./target/release/zenoh-recorder --config config/default.toml --device-id robot-042
 ```
 
 ### Option 2: With Environment Variables
@@ -244,7 +244,7 @@ export DEVICE_ID="robot_01"
 export REDUCTSTORE_URL="http://localhost:8383"
 export REDUCT_API_TOKEN="optional-token"
 
-./target/release/zenoh-recorder --config config/default.yaml
+./target/release/zenoh-recorder --config config/default.toml
 ```
 
 ## Usage Examples
@@ -333,74 +333,77 @@ echo '{
 
 ## Configuration
 
-### YAML Configuration File
+### TOML Configuration File
 
-Create a `config.yaml` file:
+Create a `config.toml` file:
 
-```yaml
+```toml
 # Zenoh connection
-zenoh:
-  mode: peer  # peer, client, or router
-  connect:
-    endpoints:
-      - tcp/localhost:7447
+[zenoh]
+mode = "peer"  # peer, client, or router
+
+[zenoh.connect]
+endpoints = [
+    "tcp/localhost:7447"
+]
 
 # Storage backend selection
-storage:
-  backend: reductstore  # reductstore, filesystem, influxdb, s3
-  reductstore:
-    url: http://localhost:8383
-    bucket_name: zenoh_recordings
-    api_token: ${REDUCT_API_TOKEN}  # Optional
-    timeout_seconds: 300
-    max_retries: 3
+[storage]
+backend = "reductstore"  # reductstore, filesystem, influxdb, s3
+
+[storage.reductstore]
+url = "http://localhost:8383"
+bucket_name = "zenoh_recordings"
+api_token = "${REDUCT_API_TOKEN}"  # Optional
+timeout_seconds = 300
+max_retries = 3
 
 # Recorder settings
-recorder:
-  device_id: ${DEVICE_ID:-robot-001}
-  
-  # Flush triggers (NEW!)
-  flush_policy:
-    max_buffer_size_bytes: 10485760      # 10 MB
-    max_buffer_duration_seconds: 10      # 10 seconds
-    min_samples_per_flush: 10
-  
-  # Compression settings (NEW!)
-  compression:
-    default_type: zstd  # none, lz4, zstd
-    default_level: 2    # 0-4
-    
-    # Per-topic overrides (optional)
-    per_topic:
-      "/camera/**":
-        type: lz4
-        level: 1  # Fast compression for high-frequency camera
-      "/lidar/**":
-        type: zstd
-        level: 3  # Better compression for lidar
-  
-  # Worker configuration (NEW!)
-  workers:
-    flush_workers: 4      # Parallel flush operations
-    queue_capacity: 1000  # Task queue size
-  
-  # Control interface
-  control:
-    key_prefix: recorder/control
-    status_key: recorder/status/**
+[recorder]
+device_id = "${DEVICE_ID:-robot-001}"
+
+# Flush triggers (NEW!)
+[recorder.flush_policy]
+max_buffer_size_bytes = 10485760      # 10 MB
+max_buffer_duration_seconds = 10      # 10 seconds
+min_samples_per_flush = 10
+
+# Compression settings (NEW!)
+[recorder.compression]
+default_type = "zstd"  # none, lz4, zstd
+default_level = 2      # 0-4
+
+# Per-topic overrides (optional)
+[recorder.compression.per_topic."/camera/**"]
+type = "lz4"
+level = 1  # Fast compression for high-frequency camera
+
+[recorder.compression.per_topic."/lidar/**"]
+type = "zstd"
+level = 3  # Better compression for lidar
+
+# Worker configuration (NEW!)
+[recorder.workers]
+flush_workers = 4       # Parallel flush operations
+queue_capacity = 1000   # Task queue size
+
+# Control interface
+[recorder.control]
+key_prefix = "recorder/control"
+status_key = "recorder/status/**"
 
 # Logging
-logging:
-  level: info  # trace, debug, info, warn, error
-  format: text
+[logging]
+level = "info"  # trace, debug, info, warn, error
+format = "text"
 ```
 
 ### Configuration Examples
 
 See `config/examples/` for more examples:
-- `reductstore.yaml` - ReductStore backend
-- `filesystem.yaml` - Filesystem backend
-- `high-performance.yaml` - Optimized for throughput
+- `reductstore.toml` - ReductStore backend
+- `filesystem.toml` - Filesystem backend
+- `high-performance.toml` - Optimized for throughput
 
 For detailed configuration options, see [config/README.md](config/README.md).
 
@@ -493,19 +496,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 **Step 3: Configure recorder with schema metadata** (optional)
 
-```yaml
-# config.yaml
-recorder:
-  schema:
-    # Enable schema metadata in recordings
-    include_metadata: true
-    
-    # Specify schema info per topic
-    per_topic:
-      "/sensors/temperature":
-        format: protobuf
-        schema_name: my_package.MyCustomMessage
-        schema_hash: v1.0.0  # Optional version
+```toml
+# config.toml
+[recorder.schema]
+# Enable schema metadata in recordings
+include_metadata = true
+
+# Specify schema info per topic
+[recorder.schema.per_topic."/sensors/temperature"]
+format = "protobuf"
+schema_name = "my_package.MyCustomMessage"
+schema_hash = "v1.0.0"  # Optional version
 ```
 
 **Step 4: Query and deserialize**
@@ -563,14 +564,14 @@ session.put("/sensors/temp", json).await?;
 
 When you enable schema metadata, the recorder stores additional information:
 
-```yaml
-schema:
-  include_metadata: true
-  per_topic:
-    "/camera/image":
-      format: protobuf
-      schema_name: sensor_msgs.Image
-      schema_hash: a1b2c3d4e5f6  # SHA hash of .proto file
+```toml
+[recorder.schema]
+include_metadata = true
+
+[recorder.schema.per_topic."/camera/image"]
+format = "protobuf"
+schema_name = "sensor_msgs.Image"
+schema_hash = "a1b2c3d4e5f6"  # SHA hash of .proto file
 ```
 
 **Benefits:**
@@ -596,28 +597,27 @@ schema:
 ### Example Configurations
 
 **Minimal (no schema metadata):**
-```yaml
-recorder:
-  schema:
-    default_format: raw
-    include_metadata: false  # Default
+```toml
+[recorder.schema]
+default_format = "raw"
+include_metadata = false  # Default
 ```
 
 **With schema metadata:**
-```yaml
-recorder:
-  schema:
-    default_format: protobuf
-    include_metadata: true
-    per_topic:
-      "/camera/**":
-        format: protobuf
-        schema_name: sensor_msgs.Image
-      "/telemetry/**":
-        format: json
+```toml
+[recorder.schema]
+default_format = "protobuf"
+include_metadata = true
+
+[recorder.schema.per_topic."/camera/**"]
+format = "protobuf"
+schema_name = "sensor_msgs.Image"
+
+[recorder.schema.per_topic."/telemetry/**"]
+format = "json"
 ```
 
-See [config/examples/schema-enabled.yaml](config/examples/schema-enabled.yaml) for a complete example.
+See [config/examples/schema-enabled.toml](config/examples/schema-enabled.toml) for a complete example.
 
 ### Key Advantages
 
@@ -664,77 +664,81 @@ Bucket: "ros_data"
 
 ## Performance Tuning
 
-All performance settings are now configurable via YAML:
+All performance settings are now configurable via TOML:
 
 ### High-Throughput Scenario
 
-```yaml
-recorder:
-  flush_policy:
-    max_buffer_size_bytes: 52428800  # 50 MB (larger batches)
-    max_buffer_duration_seconds: 5   # Faster flush
-  compression:
-    default_type: lz4  # Faster compression
-    default_level: 1
-  workers:
-    flush_workers: 8   # More parallelism
-    queue_capacity: 2000
+```toml
+[recorder.flush_policy]
+max_buffer_size_bytes = 52428800  # 50 MB (larger batches)
+max_buffer_duration_seconds = 5   # Faster flush
 
-logging:
-  level: warn  # Less overhead
+[recorder.compression]
+default_type = "lz4"  # Faster compression
+default_level = 1
+
+[recorder.workers]
+flush_workers = 8      # More parallelism
+queue_capacity = 2000
+
+[logging]
+level = "warn"  # Less overhead
 ```
 
 ### Low-Latency Scenario
 
-```yaml
-recorder:
-  flush_policy:
-    max_buffer_size_bytes: 1048576   # 1 MB (smaller batches)
-    max_buffer_duration_seconds: 1   # Immediate flush
-  compression:
-    default_type: none  # No compression overhead
-  workers:
-    flush_workers: 2
+```toml
+[recorder.flush_policy]
+max_buffer_size_bytes = 1048576   # 1 MB (smaller batches)
+max_buffer_duration_seconds = 1   # Immediate flush
+
+[recorder.compression]
+default_type = "none"  # No compression overhead
+
+[recorder.workers]
+flush_workers = 2
 ```
 
 ### Resource-Constrained Devices
 
-```yaml
-recorder:
-  flush_policy:
-    max_buffer_size_bytes: 5242880   # 5 MB
-    max_buffer_duration_seconds: 10
-  compression:
-    default_type: lz4  # Fast compression
-    default_level: 1
-  workers:
-    flush_workers: 2   # Fewer workers
-    queue_capacity: 500
+```toml
+[recorder.flush_policy]
+max_buffer_size_bytes = 5242880   # 5 MB
+max_buffer_duration_seconds = 10
 
-logging:
-  level: warn
+[recorder.compression]
+default_type = "lz4"  # Fast compression
+default_level = 1
+
+[recorder.workers]
+flush_workers = 2      # Fewer workers
+queue_capacity = 500
+
+[logging]
+level = "warn"
 ```
 
 ### Per-Topic Optimization
 
-```yaml
-recorder:
-  compression:
-    default_type: zstd
-    default_level: 2
-    per_topic:
-      "/camera/**":
-        type: lz4
-        level: 1  # Fast for high-frequency camera
-      "/lidar/**":
-        type: zstd
-        level: 3  # Better compression for lidar
-      "/imu/**":
-        type: none  # No compression for small IMU data
-        level: 0
+```toml
+[recorder.compression]
+default_type = "zstd"
+default_level = 2
+
+[recorder.compression.per_topic."/camera/**"]
+type = "lz4"
+level = 1  # Fast for high-frequency camera
+
+[recorder.compression.per_topic."/lidar/**"]
+type = "zstd"
+level = 3  # Better compression for lidar
+
+[recorder.compression.per_topic."/imu/**"]
+type = "none"  # No compression for small IMU data
+level = 0
 ```
 
-See `config/examples/high-performance.yaml` for a complete optimized configuration.
+See `config/examples/high-performance.toml` for a complete optimized configuration.
 
 ## Testing
 
@@ -795,10 +799,10 @@ cargo build --release
 **Config file not found**
 ```bash
 # Verify file path
-ls -la config/default.yaml
+ls -la config/default.toml
 
 # Use absolute path
-zenoh-recorder --config /absolute/path/to/config.yaml
+zenoh-recorder --config /absolute/path/to/config.toml
 ```
 
 **Environment variable not substituted**
@@ -815,7 +819,7 @@ echo $DEVICE_ID
 **Validation errors**
 ```bash
 # Read error message carefully
-zenoh-recorder --config my-config.yaml
+zenoh-recorder --config my-config.toml
 # Error: max_buffer_size_bytes must be > 0
 
 # Fix the invalid value in config file
@@ -851,15 +855,15 @@ zenoh-recorder --config my-config.yaml
 ### Debug Mode
 
 Enable detailed logging:
-```yaml
-logging:
-  level: debug  # or trace
-  format: text
+```toml
+[logging]
+level = "debug"  # or trace
+format = "text"
 ```
 
 Or via environment:
 ```bash
-RUST_LOG=zenoh_recorder=debug ./target/release/zenoh-recorder --config config/default.yaml
+RUST_LOG=zenoh_recorder=debug ./target/release/zenoh-recorder --config config/default.toml
 ```
 
 ## Supported Backends
@@ -873,7 +877,7 @@ RUST_LOG=zenoh_recorder=debug ./target/release/zenoh-recorder --config config/de
 - HTTP API for queries
 - Label-based metadata
 
-**Query**: Use ReductStore Web UI at `http://localhost:8383` or HTTP API
+**Query with**: ReductStore Web UI at `http://localhost:8383` or HTTP API
 
 ### ✅ Filesystem (Production Ready)
 **Best for**: Offline recording, edge devices
@@ -882,7 +886,7 @@ RUST_LOG=zenoh_recorder=debug ./target/release/zenoh-recorder --config config/de
 - No external dependencies
 - Automatic directory organization by entry name
 - JSON metadata files for labels
-- Query with MCAP tools or Foxglove Studio
+- Query with: MCAP tools or Foxglove Studio
 
 ### 🔜 InfluxDB (Coming Soon)
 **Best for**: Metrics, analytics, dashboards
@@ -930,7 +934,7 @@ See [docs/CONFIG_AND_STORAGE_DESIGN.md](docs/CONFIG_AND_STORAGE_DESIGN.md) for d
 
 ## Recent Enhancements
 
-- [x] **YAML configuration system** with environment variables
+- [x] **TOML configuration system** with environment variables
 - [x] **Multi-backend storage** via trait abstraction
 - [x] **Configurable flush triggers** (size & time)
 - [x] **Per-topic compression** settings
@@ -978,7 +982,7 @@ limitations under the License.
 ## See Also
 
 ### Project Resources
-- [Configuration Examples](config/examples/) - Example YAML configs
+- [Configuration Examples](config/examples/) - Example TOML configs
 - [Docker Compose Example](examples/docker-compose.yml) - Complete deployment example
 
 ### External Documentation

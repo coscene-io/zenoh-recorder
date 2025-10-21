@@ -27,7 +27,7 @@ jobs:
           - 28383:8383
       
       zenoh:
-        image: eclipse/zenoh:latest
+        image: eclipse/zenoh:1.6.2
         ports:
           - 27447:7447
     
@@ -120,7 +120,7 @@ jobs:
           - 28383:8383
       
       zenoh:
-        image: eclipse/zenoh:latest
+        image: eclipse/zenoh:1.6.2
         ports:
           - 27447:7447
     

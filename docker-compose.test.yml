@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # Zenoh router for E2E tests
   zenoh-test:
-    image: eclipse/zenoh:latest
+    image: eclipse/zenoh:1.6.2
     container_name: zenoh-recorder-test
     ports:
       - "27447:7447"  # Custom port to avoid conflict with host Zenoh

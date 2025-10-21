@@ -1,0 +1,59 @@
+# High-Performance Configuration
+# Optimized for high-throughput recording scenarios
+
+[zenoh]
+mode = "peer"
+
+[zenoh.connect]
+endpoints = [
+    "tcp/localhost:7447"
+]
+
+[storage]
+backend = "reductstore"
+
+[storage.reductstore]
+url = "${REDUCTSTORE_URL:-http://localhost:8383}"
+bucket_name = "high_perf_recordings"
+api_token = "${REDUCT_API_TOKEN}"
+timeout_seconds = 300
+max_retries = 3
+
+[recorder]
+device_id = "${DEVICE_ID:-high-perf-recorder}"
+
+[recorder.flush_policy]
+max_buffer_size_bytes = 52428800  # 50 MB (larger buffer)
+max_buffer_duration_seconds = 5   # Faster flush
+min_samples_per_flush = 100       # More samples per batch
+
+[recorder.compression]
+default_type = "lz4"  # Fast compression
+default_level = 1     # Fastest level
+
+# Per-topic optimizations
+[recorder.compression.per_topic."/camera/**"]
+type = "lz4"
+level = 1  # Fastest for high-frequency camera data
+
+[recorder.compression.per_topic."/lidar/**"]
+type = "lz4"
+level = 1  # Fast for lidar point clouds
+
+[recorder.compression.per_topic."/imu/**"]
+type = "none"  # No compression for small IMU data
+level = 0
+
+[recorder.workers]
+flush_workers = 8      # More workers for parallelism
+queue_capacity = 2000  # Larger queue
+
+[recorder.control]
+key_prefix = "recorder/control"
+status_key = "recorder/status/**"
+timeout_seconds = 30
+
+[logging]
+level = "warn"  # Less logging for performance
+format = "text"
+

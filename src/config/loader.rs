@@ -30,9 +30,9 @@ impl ConfigLoader {
         // Substitute environment variables
         let content = Self::substitute_env_vars(&content);
 
-        // Parse YAML
+        // Parse TOML
         let config: RecorderConfig =
-            serde_yaml::from_str(&content).context("Failed to parse YAML configuration")?;
+            toml::from_str(&content).context("Failed to parse TOML configuration")?;
 
         // Validate configuration
         Self::validate(&config)?;

@@ -53,7 +53,7 @@ async fn test_buffer_with_zero_max_size() {
     buffer.push_sample(sample).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
-    
+
     // Should have triggered flush
     assert!(flush_queue.len() > 0 || buffer.stats().0 == 0);
 }
@@ -94,7 +94,7 @@ async fn test_buffer_full_queue() {
     }
 
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     // Queue should be full or have items
     assert!(flush_queue.len() >= 0);
 }
@@ -105,7 +105,7 @@ fn test_mcap_with_very_long_topic_name() {
     let serializer = McapSerializer::new(CompressionType::None, CompressionLevel::Default);
     let long_topic = "/very/long/topic/name/with/many/segments/that/goes/on/and/on";
     let sample = create_sample("test/topic", b"data".to_vec());
-    
+
     let result = serializer.serialize_batch(long_topic, vec![sample], "rec-123");
     assert!(result.is_ok());
 }
@@ -115,7 +115,7 @@ fn test_mcap_with_very_long_recording_id() {
     let serializer = McapSerializer::new(CompressionType::None, CompressionLevel::Default);
     let long_id = "a".repeat(1000);
     let sample = create_sample("test/topic", b"data".to_vec());
-    
+
     let result = serializer.serialize_batch("/test/topic", vec![sample], &long_id);
     assert!(result.is_ok());
 }
@@ -123,7 +123,7 @@ fn test_mcap_with_very_long_recording_id() {
 #[test]
 fn test_mcap_with_huge_sample_count() {
     let serializer = McapSerializer::new(CompressionType::None, CompressionLevel::Fastest);
-    
+
     // Create many samples
     let samples: Vec<Sample> = (0..500)
         .map(|i| create_sample("test/topic", format!("sample_{}", i).into_bytes()))
@@ -158,19 +158,19 @@ async fn test_double_pause() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(50)).await;
-        
+
         // First pause should succeed
         let pause1 = manager.pause_recording(rec_id).await;
-        
+
         if pause1.success {
             // Second pause should fail (already paused)
             let pause2 = manager.pause_recording(rec_id).await;
             assert!(!pause2.success);
         }
-        
+
         manager.cancel_recording(rec_id).await;
     }
 }
@@ -199,14 +199,14 @@ async fn test_resume_without_pause() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(50)).await;
-        
+
         // Try to resume without pausing (should fail)
         let resume_resp = manager.resume_recording(rec_id).await;
         assert!(!resume_resp.success);
-        
+
         manager.cancel_recording(rec_id).await;
     }
 }
@@ -235,14 +235,14 @@ async fn test_finish_after_cancel() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(50)).await;
-        
+
         // Cancel
         let cancel_resp = manager.cancel_recording(rec_id).await;
         assert!(cancel_resp.success);
-        
+
         // After cancel, recording is still in map (with Cancelled status)
         // Can query status after cancel
         let status = manager.get_status(rec_id).await;
@@ -270,7 +270,7 @@ fn test_storage_client_with_different_configs() {
 #[test]
 fn test_request_with_all_skills() {
     let skills: Vec<String> = (0..100).map(|i| format!("skill_{}", i)).collect();
-    
+
     let request = RecorderRequest {
         command: RecorderCommand::Start,
         recording_id: None,
@@ -286,7 +286,7 @@ fn test_request_with_all_skills() {
     };
 
     assert_eq!(request.skills.len(), 100);
-    
+
     // Verify serialization
     let json = serde_json::to_string(&request).unwrap();
     let deserialized: RecorderRequest = serde_json::from_str(&json).unwrap();
@@ -344,7 +344,7 @@ fn test_recording_metadata_json_serialization() {
     let json = serde_json::to_string_pretty(&metadata).unwrap();
     assert!(json.contains("test-rec"));
     assert!(json.contains("test_scene"));
-    
+
     let deserialized: RecordingMetadata = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.recording_id, "test-rec");
     assert_eq!(deserialized.total_samples, 50000);
@@ -353,21 +353,17 @@ fn test_recording_metadata_json_serialization() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_device_ids() {
     let session = create_session().await;
-    
+
     let device_ids = vec!["device-1", "device-2", "device-3"];
-    
+
     for device_id in device_ids {
         let manager = Arc::new(RecorderManager::new(
             session.clone(),
             "http://localhost:8383".to_string(),
             "bucket".to_string(),
         ));
-        
-        let _control = ControlInterface::new(
-            session.clone(),
-            manager,
-            device_id.to_string(),
-        );
+
+        let _control = ControlInterface::new(session.clone(), manager, device_id.to_string());
     }
 }
 
@@ -375,7 +371,7 @@ async fn test_control_interface_device_ids() {
 fn test_compression_level_copy_trait() {
     let level = CompressionLevel::Default;
     let level_copy = level;
-    
+
     assert_eq!(level.to_zstd_level(), level_copy.to_zstd_level());
 }
 
@@ -383,7 +379,7 @@ fn test_compression_level_copy_trait() {
 fn test_compression_type_copy_trait() {
     let comp = CompressionType::Zstd;
     let comp_copy = comp;
-    
+
     assert_eq!(comp, comp_copy);
 }
 
@@ -391,14 +387,14 @@ fn test_compression_type_copy_trait() {
 fn test_recording_status_copy_trait() {
     let status = RecordingStatus::Recording;
     let status_copy = status;
-    
+
     assert_eq!(status, status_copy);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recorder_with_all_compression_types() {
     let session = create_session().await;
-    
+
     let compression_types = vec![
         CompressionType::None,
         CompressionType::Lz4,
@@ -427,7 +423,7 @@ async fn test_recorder_with_all_compression_types() {
         };
 
         let response = manager.start_recording(request).await;
-        
+
         if let Some(rec_id) = &response.recording_id {
             tokio::time::sleep(Duration::from_millis(50)).await;
             manager.cancel_recording(rec_id).await;
@@ -438,7 +434,7 @@ async fn test_recorder_with_all_compression_types() {
 #[test]
 fn test_large_sample_count_serialization() {
     let serializer = McapSerializer::new(CompressionType::Lz4, CompressionLevel::Fastest);
-    
+
     // 1000 samples
     let samples: Vec<Sample> = (0..1000)
         .map(|i| create_sample("test/topic", format!("{}", i).into_bytes()))
@@ -452,7 +448,7 @@ fn test_large_sample_count_serialization() {
 #[test]
 fn test_mcap_alternating_data_sizes() {
     let serializer = McapSerializer::new(CompressionType::Zstd, CompressionLevel::Default);
-    
+
     let mut samples = Vec::new();
     for i in 0..50 {
         let size = if i % 2 == 0 { 100 } else { 10000 };
@@ -510,7 +506,7 @@ fn test_all_recording_status_serialization() {
     for (status, expected_str) in statuses {
         let json = serde_json::to_string(&status).unwrap();
         assert!(json.contains(expected_str));
-        
+
         let deserialized: RecordingStatus = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized, status);
     }
@@ -543,9 +539,8 @@ fn test_compression_type_serialization() {
     for (comp_type, expected_str) in types {
         let json = serde_json::to_string(&comp_type).unwrap();
         assert!(json.contains(expected_str));
-        
+
         let deserialized: CompressionType = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized, comp_type);
     }
 }
-

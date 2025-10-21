@@ -137,7 +137,8 @@ fn test_control_request_parsing_finish_command() {
 
 #[test]
 fn test_control_response_success() {
-    let response = RecorderResponse::success(Some("rec-001".to_string()), Some("test-bucket".to_string()));
+    let response =
+        RecorderResponse::success(Some("rec-001".to_string()), Some("test-bucket".to_string()));
 
     let json = serde_json::to_string(&response).unwrap();
     let parsed: RecorderResponse = serde_json::from_str(&json).unwrap();
@@ -399,7 +400,7 @@ fn test_status_with_large_buffer_size() {
         device_id: "dev-1".to_string(),
         data_collector_id: None,
         active_topics: vec![],
-        buffer_size_bytes: 1_000_000_000, // 1GB
+        buffer_size_bytes: 1_000_000_000,     // 1GB
         total_recorded_bytes: 10_000_000_000, // 10GB
     };
 
@@ -541,4 +542,3 @@ fn test_status_response_cancelled_state() {
 
     assert_eq!(parsed.status, RecordingStatus::Cancelled);
 }
-

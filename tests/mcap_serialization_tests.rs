@@ -71,7 +71,12 @@ fn test_serialize_with_lz4_compression() {
     let serializer = McapSerializer::new(CompressionType::Lz4, CompressionLevel::Fast);
 
     let samples: Vec<Sample> = (0..50)
-        .map(|i| create_sample("test/topic", format!("payload_with_data_{}", i).into_bytes()))
+        .map(|i| {
+            create_sample(
+                "test/topic",
+                format!("payload_with_data_{}", i).into_bytes(),
+            )
+        })
         .collect();
 
     let result = serializer
@@ -86,7 +91,12 @@ fn test_serialize_with_zstd_compression() {
     let serializer = McapSerializer::new(CompressionType::Zstd, CompressionLevel::Default);
 
     let samples: Vec<Sample> = (0..50)
-        .map(|i| create_sample("test/topic", format!("test_payload_data_{}", i).into_bytes()))
+        .map(|i| {
+            create_sample(
+                "test/topic",
+                format!("test_payload_data_{}", i).into_bytes(),
+            )
+        })
         .collect();
 
     let result = serializer
@@ -205,7 +215,7 @@ fn test_compression_ratio() {
     let uncompressed = serializer_none
         .serialize_batch("/test/topic", samples.clone(), "rec-123")
         .unwrap();
-    
+
     let compressed = serializer_zstd
         .serialize_batch("/test/topic", samples, "rec-123")
         .unwrap();
@@ -213,7 +223,10 @@ fn test_compression_ratio() {
     // Compressed should be significantly smaller
     assert!(compressed.len() < uncompressed.len());
     let ratio = uncompressed.len() as f64 / compressed.len() as f64;
-    assert!(ratio > 2.0, "Compression ratio should be > 2x for repeated data");
+    assert!(
+        ratio > 2.0,
+        "Compression ratio should be > 2x for repeated data"
+    );
 }
 
 #[test]
@@ -243,5 +256,3 @@ fn test_recording_id_in_output() {
     let result_str = String::from_utf8_lossy(&result);
     assert!(result_str.contains("unique-rec-id-456"));
 }
-
-

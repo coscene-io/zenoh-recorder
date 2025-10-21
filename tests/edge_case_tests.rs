@@ -93,7 +93,7 @@ async fn test_many_topics() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(100)).await;
         manager.cancel_recording(rec_id).await;
@@ -104,7 +104,7 @@ async fn test_many_topics() {
 fn test_very_large_compression_level() {
     let serializer = McapSerializer::new(CompressionType::Zstd, CompressionLevel::Slowest);
     let sample = create_sample("test/topic", b"data".to_vec());
-    
+
     let result = serializer.serialize_batch("/test/topic", vec![sample], "rec-123");
     assert!(result.is_ok());
 }
@@ -113,7 +113,7 @@ fn test_very_large_compression_level() {
 fn test_serialization_with_empty_recording_id() {
     let serializer = McapSerializer::new(CompressionType::None, CompressionLevel::Default);
     let sample = create_sample("test/topic", b"data".to_vec());
-    
+
     let result = serializer.serialize_batch("/test/topic", vec![sample], "");
     assert!(result.is_ok());
 }
@@ -122,7 +122,7 @@ fn test_serialization_with_empty_recording_id() {
 fn test_serialization_with_special_chars_in_topic() {
     let serializer = McapSerializer::new(CompressionType::None, CompressionLevel::Default);
     let sample = create_sample("test/topic", b"data".to_vec());
-    
+
     // Topic with special characters in path
     let result = serializer.serialize_batch("/test-topic_with.chars", vec![sample], "rec-123");
     assert!(result.is_ok());
@@ -149,12 +149,13 @@ fn test_all_compression_combinations() {
     for comp_type in &compression_types {
         for comp_level in &compression_levels {
             let serializer = McapSerializer::new(*comp_type, *comp_level);
-            let result = serializer.serialize_batch(
-                "/test/topic",
-                vec![sample.clone()],
-                "rec-123",
+            let result = serializer.serialize_batch("/test/topic", vec![sample.clone()], "rec-123");
+            assert!(
+                result.is_ok(),
+                "Failed for {:?} at {:?}",
+                comp_type,
+                comp_level
             );
-            assert!(result.is_ok(), "Failed for {:?} at {:?}", comp_type, comp_level);
         }
     }
 }
@@ -185,7 +186,7 @@ async fn test_rapid_start_stop() {
         };
 
         let response = manager.start_recording(request).await;
-        
+
         if let Some(rec_id) = &response.recording_id {
             // Immediately cancel
             manager.cancel_recording(rec_id).await;
@@ -196,10 +197,8 @@ async fn test_rapid_start_stop() {
 #[test]
 fn test_recorder_response_builder_functions() {
     // Test success builder
-    let success_resp = RecorderResponse::success(
-        Some("rec-123".to_string()),
-        Some("bucket".to_string()),
-    );
+    let success_resp =
+        RecorderResponse::success(Some("rec-123".to_string()), Some("bucket".to_string()));
     assert!(success_resp.success);
     assert_eq!(success_resp.message, "Operation completed successfully");
     assert_eq!(success_resp.recording_id, Some("rec-123".to_string()));
@@ -285,7 +284,7 @@ async fn test_finish_immediately_after_start() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         // Finish immediately without pause
         let finish_resp = manager.finish_recording(rec_id).await;
@@ -329,4 +328,3 @@ fn test_status_response_with_large_values() {
     assert_eq!(response.buffer_size_bytes, i32::MAX);
     assert_eq!(response.total_recorded_bytes, i64::MAX);
 }
-

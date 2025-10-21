@@ -83,7 +83,7 @@ impl McapSerializer {
             schema_config: SchemaConfig::default(),
         }
     }
-    
+
     /// Create a new MCAP serializer with schema configuration
     pub fn with_schema_config(
         compression_type: CompressionType,
@@ -96,13 +96,13 @@ impl McapSerializer {
             schema_config,
         }
     }
-    
+
     /// Get schema info for a topic
     fn get_schema_info(&self, topic: &str) -> Option<crate::proto::SchemaInfo> {
         if !self.schema_config.include_metadata {
             return None;
         }
-        
+
         // Check per-topic schema config
         if let Some(topic_schema) = self.schema_config.per_topic.get(topic) {
             return Some(crate::proto::SchemaInfo {
@@ -112,7 +112,7 @@ impl McapSerializer {
                 schema_data: vec![],
             });
         }
-        
+
         // Use default format if metadata is enabled
         Some(crate::proto::SchemaInfo {
             format: self.schema_config.default_format.clone(),

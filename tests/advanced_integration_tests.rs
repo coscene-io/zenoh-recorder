@@ -44,11 +44,12 @@ async fn test_control_with_start_command_full() {
     ));
 
     let control = ControlInterface::new(session.clone(), manager.clone(), "ctl-dev-1".to_string());
-    
+
     // Start control in background
-    let handle = tokio::spawn(async move {
-        tokio::time::timeout(Duration::from_secs(5), control.run()).await
-    });
+    let handle =
+        tokio::spawn(
+            async move { tokio::time::timeout(Duration::from_secs(5), control.run()).await },
+        );
 
     // Give time to start
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -56,15 +57,14 @@ async fn test_control_with_start_command_full() {
     // Create a status query that will be handled
     let status_query_key = "recorder/status/test-recording-999";
     if let Ok(replies) = session.get(status_query_key).res().await {
-        if let Ok(reply) = tokio::time::timeout(
-            Duration::from_millis(500),
-            replies.recv_async()
-        ).await {
+        if let Ok(reply) =
+            tokio::time::timeout(Duration::from_millis(500), replies.recv_async()).await
+        {
             if let Ok(reply) = reply {
                 match reply.sample {
                     Ok(sample) => {
                         // Should get a status response
-                        let response: Result<StatusResponse, _> = 
+                        let response: Result<StatusResponse, _> =
                             serde_json::from_slice(&sample.payload.contiguous());
                         if let Ok(status) = response {
                             assert!(!status.success); // Should fail for nonexistent ID
@@ -104,33 +104,33 @@ async fn test_recorder_comprehensive_lifecycle() {
     };
 
     let start_resp = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &start_resp.recording_id {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         // Get status - should be Recording
         let status1 = manager.get_status(rec_id).await;
         if status1.success {
             assert_eq!(status1.status, RecordingStatus::Recording);
             assert_eq!(status1.active_topics.len(), 2);
         }
-        
+
         // Pause
         let pause_resp = manager.pause_recording(rec_id).await;
         if pause_resp.success {
             tokio::time::sleep(Duration::from_millis(50)).await;
-            
+
             // Get status - should be Paused
             let status2 = manager.get_status(rec_id).await;
             if status2.success {
                 assert_eq!(status2.status, RecordingStatus::Paused);
             }
-            
+
             // Resume
             let resume_resp = manager.resume_recording(rec_id).await;
             if resume_resp.success {
                 tokio::time::sleep(Duration::from_millis(50)).await;
-                
+
                 // Get status - should be Recording again
                 let status3 = manager.get_status(rec_id).await;
                 if status3.success {
@@ -138,7 +138,7 @@ async fn test_recorder_comprehensive_lifecycle() {
                 }
             }
         }
-        
+
         // Finish
         let finish_resp = manager.finish_recording(rec_id).await;
         assert!(finish_resp.success || !finish_resp.success);
@@ -229,24 +229,24 @@ async fn test_status_query_for_each_state() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         // Check status in Recording state
         let status1 = manager.get_status(rec_id).await;
         assert!(status1.success || !status1.success);
-        
+
         // Pause and check status
         let pause_resp = manager.pause_recording(rec_id).await;
         if pause_resp.success {
             let status2 = manager.get_status(rec_id).await;
             assert!(status2.success || !status2.success);
-            
+
             // Resume and check status
             manager.resume_recording(rec_id).await;
             let status3 = manager.get_status(rec_id).await;
             assert!(status3.success || !status3.success);
         }
-        
+
         // Finish and check status one more time
         manager.finish_recording(rec_id).await;
         let status4 = manager.get_status(rec_id).await;
@@ -281,16 +281,16 @@ async fn test_recording_with_maximum_metadata() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(200)).await;
-        
+
         let status = manager.get_status(rec_id).await;
         if status.success {
             assert_eq!(status.skills.len(), 200);
             assert_eq!(status.active_topics.len(), 100);
         }
-        
+
         manager.cancel_recording(rec_id).await;
     }
 }
@@ -355,10 +355,7 @@ fn test_response_success_with_various_ids() {
     let ids = vec!["rec-001", "rec-999", "abc-123-def", "uuid-style-id"];
 
     for id in ids {
-        let response = RecorderResponse::success(
-            Some(id.to_string()),
-            Some("bucket".to_string()),
-        );
+        let response = RecorderResponse::success(Some(id.to_string()), Some("bucket".to_string()));
         assert!(response.success);
         assert_eq!(response.recording_id.unwrap(), id);
     }
@@ -388,7 +385,7 @@ async fn test_rapid_state_transitions() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         // Rapid transitions: pause -> resume -> pause -> resume -> finish
         for _ in 0..2 {
@@ -397,7 +394,7 @@ async fn test_rapid_state_transitions() {
             manager.resume_recording(rec_id).await;
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        
+
         manager.finish_recording(rec_id).await;
     }
 }
@@ -430,10 +427,10 @@ async fn test_get_status_detailed_fields() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         let status = manager.get_status(rec_id).await;
         if status.success {
             // Verify all fields are populated correctly
@@ -447,7 +444,7 @@ async fn test_get_status_detailed_fields() {
             assert!(status.buffer_size_bytes >= 0);
             assert!(status.total_recorded_bytes >= 0);
         }
-        
+
         manager.cancel_recording(rec_id).await;
     }
 }
@@ -461,15 +458,13 @@ async fn test_control_interface_parallel_queries() {
         "parallel_query_bucket".to_string(),
     ));
 
-    let control = ControlInterface::new(
-        session.clone(),
-        manager.clone(),
-        "parallel-dev".to_string(),
-    );
+    let control =
+        ControlInterface::new(session.clone(), manager.clone(), "parallel-dev".to_string());
 
-    let handle = tokio::spawn(async move {
-        tokio::time::timeout(Duration::from_secs(3), control.run()).await
-    });
+    let handle =
+        tokio::spawn(
+            async move { tokio::time::timeout(Duration::from_secs(3), control.run()).await },
+        );
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
@@ -516,10 +511,10 @@ async fn test_finish_with_buffer_flush() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         // Publish some data
         if let Ok(publisher) = session.declare_publisher("test/flush_finish").res().await {
             for i in 0..10 {
@@ -527,15 +522,15 @@ async fn test_finish_with_buffer_flush() {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }
-        
+
         tokio::time::sleep(Duration::from_millis(200)).await;
-        
+
         // Finish should flush all buffers
         let finish_resp = manager.finish_recording(rec_id).await;
-        
+
         // Wait for flush to complete
         tokio::time::sleep(Duration::from_secs(3)).await;
-        
+
         assert!(finish_resp.success || !finish_resp.success);
     }
 }
@@ -612,4 +607,3 @@ fn test_recording_metadata_all_optional_fields() {
     assert!(deser2.scene.is_some());
     assert!(deser2.end_time.is_some());
 }
-

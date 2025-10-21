@@ -41,7 +41,12 @@ fn test_topic_to_entry_conversions() {
     ];
 
     for (input, expected) in test_cases {
-        assert_eq!(topic_to_entry_name(input), expected, "Failed for input: {}", input);
+        assert_eq!(
+            topic_to_entry_name(input),
+            expected,
+            "Failed for input: {}",
+            input
+        );
     }
 }
 
@@ -49,8 +54,8 @@ fn test_topic_to_entry_conversions() {
 fn test_topic_to_entry_edge_cases() {
     assert_eq!(topic_to_entry_name(""), "");
     assert_eq!(topic_to_entry_name("/"), "");
-    assert_eq!(topic_to_entry_name("//"), "");  // After trim_start_matches('/'), becomes ""
-    assert_eq!(topic_to_entry_name("///"), "");  // After trim_start_matches('/'), becomes ""
+    assert_eq!(topic_to_entry_name("//"), ""); // After trim_start_matches('/'), becomes ""
+    assert_eq!(topic_to_entry_name("///"), ""); // After trim_start_matches('/'), becomes ""
     assert_eq!(topic_to_entry_name("/a/"), "a_");
 }
 
@@ -109,7 +114,7 @@ fn test_timestamp_generation() {
 fn test_entry_name_special_characters() {
     // Test that special characters are handled correctly
     let topics_with_special = vec![
-        "/topic$special", 
+        "/topic$special",
         "/topic@email",
         "/topic#hash",
         "/topic%percent",
@@ -136,4 +141,3 @@ fn test_numeric_topics() {
     assert_eq!(topic_to_entry_name("/sensor/1"), "sensor_1");
     assert_eq!(topic_to_entry_name("/0"), "0");
 }
-

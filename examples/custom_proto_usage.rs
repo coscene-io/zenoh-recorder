@@ -35,11 +35,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Publish to Zenoh (recorder stores raw bytes)
     let session = zenoh::open(config::default()).res().await?;
-    
-    session
-        .put("/sensors/temperature", buffer)
-        .res()
-        .await?;
+
+    session.put("/sensors/temperature", buffer).res().await?;
 
     println!("✅ Published custom proto message to Zenoh");
     println!("   Recorder will store it as-is (raw bytes)");
@@ -65,4 +62,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 // ✅ Schema metadata is optional (for documentation)
 // ✅ No recompilation of recorder needed
 // ✅ Works with any serialization format (proto, JSON, msgpack, etc.)
-

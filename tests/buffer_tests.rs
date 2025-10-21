@@ -207,4 +207,3 @@ async fn test_concurrent_pushes() {
     let (samples, _bytes) = buffer.stats();
     assert_eq!(samples, 50); // 5 tasks * 10 samples
 }
-

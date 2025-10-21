@@ -19,35 +19,27 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 /// Main configuration structure
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct RecorderConfig {
+    #[serde(default)]
     pub zenoh: ZenohConfig,
+    #[serde(default)]
     pub storage: StorageConfig,
+    #[serde(default)]
     pub recorder: RecorderSettings,
     #[serde(default)]
     pub logging: LoggingConfig,
-}
-
-impl Default for RecorderConfig {
-    fn default() -> Self {
-        Self {
-            zenoh: ZenohConfig::default(),
-            storage: StorageConfig::default(),
-            recorder: RecorderSettings::default(),
-            logging: LoggingConfig::default(),
-        }
-    }
 }
 
 /// Zenoh configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ZenohConfig {
     #[serde(default = "default_mode")]
-    pub mode: String,  // "peer", "client", or "router"
-    
+    pub mode: String, // "peer", "client", or "router"
+
     #[serde(default)]
     pub connect: Option<ConnectConfig>,
-    
+
     #[serde(default)]
     pub listen: Option<ListenConfig>,
 }
@@ -79,7 +71,7 @@ pub struct ListenConfig {
 pub struct StorageConfig {
     /// Backend type: "reductstore", "filesystem", "influxdb", "s3"
     pub backend: String,
-    
+
     /// Backend-specific configuration
     #[serde(flatten)]
     pub backend_config: BackendConfig,
@@ -117,14 +109,14 @@ impl BackendConfig {
             _ => None,
         }
     }
-    
+
     pub fn as_reductstore_mut(&mut self) -> Option<&mut ReductStoreConfig> {
         match self {
             BackendConfig::ReductStore { reductstore } => Some(reductstore),
             _ => None,
         }
     }
-    
+
     pub fn as_filesystem(&self) -> Option<&FilesystemConfig> {
         match self {
             BackendConfig::Filesystem { filesystem } => Some(filesystem),
@@ -139,10 +131,10 @@ pub struct ReductStoreConfig {
     pub bucket_name: String,
     #[serde(default)]
     pub api_token: Option<String>,
-    
+
     #[serde(default = "default_timeout")]
     pub timeout_seconds: u64,
-    
+
     #[serde(default = "default_retries")]
     pub max_retries: u32,
 }
@@ -163,7 +155,7 @@ impl Default for ReductStoreConfig {
 pub struct FilesystemConfig {
     pub base_path: String,
     #[serde(default = "default_file_format")]
-    pub file_format: String,  // "mcap"
+    pub file_format: String, // "mcap"
 }
 
 impl Default for FilesystemConfig {
@@ -206,10 +198,10 @@ impl Default for RecorderSettings {
 pub struct FlushPolicy {
     /// Maximum buffer size in bytes before flush
     pub max_buffer_size_bytes: usize,
-    
+
     /// Maximum duration in seconds before flush
     pub max_buffer_duration_seconds: u64,
-    
+
     /// Minimum samples before flush (avoid tiny flushes)
     #[serde(default = "default_min_samples")]
     pub min_samples_per_flush: usize,
@@ -218,8 +210,8 @@ pub struct FlushPolicy {
 impl Default for FlushPolicy {
     fn default() -> Self {
         Self {
-            max_buffer_size_bytes: 10485760,  // 10 MB
-            max_buffer_duration_seconds: 10,  // 10 seconds
+            max_buffer_size_bytes: 10485760, // 10 MB
+            max_buffer_duration_seconds: 10, // 10 seconds
             min_samples_per_flush: default_min_samples(),
         }
     }
@@ -233,9 +225,9 @@ impl FlushPolicy {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CompressionConfig {
-    pub default_type: String,  // "none", "lz4", "zstd"
-    pub default_level: u8,     // 0-4
-    
+    pub default_type: String, // "none", "lz4", "zstd"
+    pub default_level: u8,    // 0-4
+
     #[serde(default)]
     pub per_topic: HashMap<String, TopicCompression>,
 }
@@ -260,12 +252,12 @@ pub struct TopicCompression {
 pub struct SchemaConfig {
     /// Default format for messages without explicit schema
     #[serde(default = "default_schema_format")]
-    pub default_format: String,  // "raw", "protobuf", "json", etc.
-    
+    pub default_format: String, // "raw", "protobuf", "json", etc.
+
     /// Whether to include schema metadata in recordings
     #[serde(default)]
     pub include_metadata: bool,
-    
+
     /// Per-topic schema information
     #[serde(default)]
     pub per_topic: HashMap<String, TopicSchemaInfo>,
@@ -283,7 +275,7 @@ impl Default for SchemaConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TopicSchemaInfo {
-    pub format: String,              // "protobuf", "json", "msgpack", "raw"
+    pub format: String, // "protobuf", "json", "msgpack", "raw"
     #[serde(default)]
     pub schema_name: Option<String>, // e.g., "sensor_msgs/Image"
     #[serde(default)]
@@ -294,7 +286,7 @@ pub struct TopicSchemaInfo {
 pub struct WorkerConfig {
     #[serde(default = "default_flush_workers")]
     pub flush_workers: usize,
-    
+
     #[serde(default = "default_queue_capacity")]
     pub queue_capacity: usize,
 }
@@ -312,10 +304,10 @@ impl Default for WorkerConfig {
 pub struct ControlConfig {
     #[serde(default = "default_control_prefix")]
     pub key_prefix: String,
-    
+
     #[serde(default = "default_status_key")]
     pub status_key: String,
-    
+
     #[serde(default = "default_control_timeout")]
     pub timeout_seconds: u64,
 }
@@ -333,10 +325,10 @@ impl Default for ControlConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LoggingConfig {
     #[serde(default = "default_log_level")]
-    pub level: String,  // "trace", "debug", "info", "warn", "error"
-    
+    pub level: String, // "trace", "debug", "info", "warn", "error"
+
     #[serde(default = "default_log_format")]
-    pub format: String,  // "text", "json"
+    pub format: String, // "text", "json"
 }
 
 impl Default for LoggingConfig {
@@ -349,17 +341,42 @@ impl Default for LoggingConfig {
 }
 
 // Default value functions
-fn default_mode() -> String { "peer".to_string() }
-fn default_timeout() -> u64 { 300 }
-fn default_retries() -> u32 { 3 }
-fn default_min_samples() -> usize { 10 }
-fn default_flush_workers() -> usize { 4 }
-fn default_queue_capacity() -> usize { 1000 }
-fn default_control_prefix() -> String { "recorder/control".to_string() }
-fn default_status_key() -> String { "recorder/status/**".to_string() }
-fn default_control_timeout() -> u64 { 30 }
-fn default_log_level() -> String { "info".to_string() }
-fn default_log_format() -> String { "text".to_string() }
-fn default_file_format() -> String { "mcap".to_string() }
-fn default_schema_format() -> String { "raw".to_string() }
-
+fn default_mode() -> String {
+    "peer".to_string()
+}
+fn default_timeout() -> u64 {
+    300
+}
+fn default_retries() -> u32 {
+    3
+}
+fn default_min_samples() -> usize {
+    10
+}
+fn default_flush_workers() -> usize {
+    4
+}
+fn default_queue_capacity() -> usize {
+    1000
+}
+fn default_control_prefix() -> String {
+    "recorder/control".to_string()
+}
+fn default_status_key() -> String {
+    "recorder/status/**".to_string()
+}
+fn default_control_timeout() -> u64 {
+    30
+}
+fn default_log_level() -> String {
+    "info".to_string()
+}
+fn default_log_format() -> String {
+    "text".to_string()
+}
+fn default_file_format() -> String {
+    "mcap".to_string()
+}
+fn default_schema_format() -> String {
+    "raw".to_string()
+}

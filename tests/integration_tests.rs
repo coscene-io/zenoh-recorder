@@ -76,7 +76,7 @@ async fn test_start_recording() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     // Note: This may fail if ReductStore is not running, but structure is tested
     assert!(response.recording_id.is_some() || !response.success);
 }
@@ -97,7 +97,7 @@ async fn test_pause_nonexistent_recording() {
     );
 
     let response = manager.pause_recording("nonexistent-id").await;
-    
+
     assert!(!response.success);
     assert!(response.message.contains("not found"));
 }
@@ -118,7 +118,7 @@ async fn test_resume_nonexistent_recording() {
     );
 
     let response = manager.resume_recording("nonexistent-id").await;
-    
+
     assert!(!response.success);
     assert!(response.message.contains("not found"));
 }
@@ -139,7 +139,7 @@ async fn test_cancel_nonexistent_recording() {
     );
 
     let response = manager.cancel_recording("nonexistent-id").await;
-    
+
     assert!(!response.success);
 }
 
@@ -159,7 +159,7 @@ async fn test_finish_nonexistent_recording() {
     );
 
     let response = manager.finish_recording("nonexistent-id").await;
-    
+
     assert!(!response.success);
 }
 
@@ -179,7 +179,7 @@ async fn test_get_status_nonexistent() {
     );
 
     let response = manager.get_status("nonexistent-id").await;
-    
+
     assert!(!response.success);
     assert_eq!(response.status, RecordingStatus::Idle);
 }
@@ -235,7 +235,7 @@ async fn test_recording_lifecycle() {
     };
 
     let start_response = manager.start_recording(start_request).await;
-    
+
     if let Some(rec_id) = &start_response.recording_id {
         // Wait a bit
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -258,4 +258,3 @@ async fn test_recording_lifecycle() {
         let _finish_response = manager.finish_recording(rec_id).await;
     }
 }
-

@@ -38,19 +38,18 @@ impl ReductStoreBackend {
             .pool_idle_timeout(Duration::from_secs(90))
             .tcp_keepalive(Duration::from_secs(60))
             .timeout(Duration::from_secs(config.timeout_seconds));
-        
+
         // Add API token if provided
         if let Some(token) = &config.api_token {
             let mut headers = reqwest::header::HeaderMap::new();
             let auth_value = format!("Bearer {}", token);
             headers.insert(
                 reqwest::header::AUTHORIZATION,
-                reqwest::header::HeaderValue::from_str(&auth_value)
-                    .context("Invalid API token")?,
+                reqwest::header::HeaderValue::from_str(&auth_value).context("Invalid API token")?,
             );
             client_builder = client_builder.default_headers(headers);
         }
-        
+
         let client = client_builder
             .build()
             .context("Failed to build HTTP client")?;
@@ -62,7 +61,7 @@ impl ReductStoreBackend {
             max_retries: config.max_retries,
         })
     }
-    
+
     /// Create bucket if it doesn't exist
     async fn ensure_bucket(&self) -> Result<()> {
         let url = format!("{}/api/v1/b/{}", self.base_url, self.bucket_name);
@@ -100,7 +99,7 @@ impl StorageBackend for ReductStoreBackend {
     async fn initialize(&self) -> Result<()> {
         self.ensure_bucket().await
     }
-    
+
     async fn write_record(
         &self,
         entry_name: &str,
@@ -141,7 +140,7 @@ impl StorageBackend for ReductStoreBackend {
 
         Ok(())
     }
-    
+
     async fn write_with_retry(
         &self,
         entry_name: &str,
@@ -156,7 +155,7 @@ impl StorageBackend for ReductStoreBackend {
         } else {
             self.max_retries
         };
-        
+
         // Call the default trait implementation
         let mut attempt = 0;
         let mut delay = Duration::from_millis(100);
@@ -192,14 +191,16 @@ impl StorageBackend for ReductStoreBackend {
                 Err(e) => {
                     tracing::error!(
                         "Upload to entry '{}' failed after {} attempts: {}",
-                        entry_name, retries, e
+                        entry_name,
+                        retries,
+                        e
                     );
                     return Err(e);
                 }
             }
         }
     }
-    
+
     async fn health_check(&self) -> Result<bool> {
         let url = format!("{}/api/v1/info", self.base_url);
         match self.client.get(&url).send().await {
@@ -214,7 +215,7 @@ impl StorageBackend for ReductStoreBackend {
             }
         }
     }
-    
+
     fn backend_type(&self) -> &str {
         "reductstore"
     }
@@ -227,4 +228,3 @@ pub fn topic_to_entry_name(topic: &str) -> String {
         .replace('/', "_")
         .replace("**", "all")
 }
-

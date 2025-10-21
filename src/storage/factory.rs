@@ -35,31 +35,31 @@ impl BackendFactory {
                     .backend_config
                     .as_reductstore()
                     .ok_or_else(|| anyhow::anyhow!("ReductStore config missing"))?;
-                
+
                 let backend = ReductStoreBackend::new(backend_config.clone())?;
                 Ok(Arc::new(backend))
             }
-            
+
             "filesystem" => {
                 let backend_config = config
                     .backend_config
                     .as_filesystem()
                     .ok_or_else(|| anyhow::anyhow!("Filesystem config missing"))?;
-                
+
                 let backend = FilesystemBackend::new(backend_config.clone())?;
                 Ok(Arc::new(backend))
             }
-            
+
             "influxdb" => {
                 // TODO: Implement InfluxDB backend (optional)
                 bail!("InfluxDB backend not yet implemented. Coming in Phase 3!")
             }
-            
+
             "s3" => {
                 // TODO: Implement S3 backend (optional)
                 bail!("S3 backend not yet implemented. Coming in Phase 3!")
             }
-            
+
             unknown => bail!(
                 "Unknown storage backend: '{}'. Supported: reductstore, filesystem (influxdb, s3 coming soon)",
                 unknown
@@ -72,7 +72,7 @@ impl BackendFactory {
 mod tests {
     use super::*;
     use crate::config::ReductStoreConfig;
-    
+
     #[test]
     fn test_create_reductstore_backend() {
         let storage_config = StorageConfig {
@@ -81,12 +81,12 @@ mod tests {
                 reductstore: ReductStoreConfig::default(),
             },
         };
-        
+
         let backend = BackendFactory::create(&storage_config);
         assert!(backend.is_ok());
         assert_eq!(backend.unwrap().backend_type(), "reductstore");
     }
-    
+
     #[test]
     fn test_create_filesystem_backend() {
         let storage_config = StorageConfig {
@@ -95,12 +95,12 @@ mod tests {
                 filesystem: crate::config::FilesystemConfig::default(),
             },
         };
-        
+
         let backend = BackendFactory::create(&storage_config);
         assert!(backend.is_ok());
         assert_eq!(backend.unwrap().backend_type(), "filesystem");
     }
-    
+
     #[test]
     fn test_create_unknown_backend() {
         let storage_config = StorageConfig {
@@ -109,7 +109,7 @@ mod tests {
                 reductstore: ReductStoreConfig::default(),
             },
         };
-        
+
         let backend = BackendFactory::create(&storage_config);
         assert!(backend.is_err());
         if let Err(e) = backend {
@@ -117,4 +117,3 @@ mod tests {
         }
     }
 }
-

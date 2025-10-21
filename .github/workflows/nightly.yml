@@ -27,50 +27,40 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
       
       - name: Start Docker infrastructure
-        run: |
-          cd zenoh-recorder
-          docker-compose -f docker-compose.test.yml up -d
+        run: docker-compose -f docker-compose.test.yml up -d
       
       - name: Wait for services
         run: |
-          cd zenoh-recorder
           ./scripts/run_tests_with_docker.sh --no-cleanup &
           sleep 30
       
       - name: Run all tests with coverage
-        run: |
-          cd zenoh-recorder
-          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
         env:
           REDUCTSTORE_TEST_URL: http://127.0.0.1:28383
           ZENOH_TEST_ENDPOINT: tcp/127.0.0.1:27447
       
       - name: Generate HTML coverage report
-        run: |
-          cd zenoh-recorder
-          cargo llvm-cov --all-features --workspace --html
+        run: cargo llvm-cov --all-features --workspace --html
       
       - name: Upload coverage report
         uses: actions/upload-artifact@v3
         with:
           name: coverage-report
-          path: zenoh-recorder/target/llvm-cov/html/
+          path: target/llvm-cov/html/
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          files: zenoh-recorder/lcov.info
+          files: lcov.info
           flags: nightly
       
       - name: Run benchmarks (if any)
-        run: |
-          cd zenoh-recorder
-          cargo bench --no-run || true
+        run: cargo bench --no-run || true
       
       - name: Check for memory leaks (Valgrind)
         run: |
           sudo apt-get update && sudo apt-get install -y valgrind
-          cd zenoh-recorder
           cargo build --tests
           # Run a simple test with valgrind
           valgrind --leak-check=full --error-exitcode=1 \
@@ -78,9 +68,7 @@ jobs:
       
       - name: Cleanup
         if: always()
-        run: |
-          cd zenoh-recorder
-          docker-compose -f docker-compose.test.yml down -v
+        run: docker-compose -f docker-compose.test.yml down -v
       
       - name: Notify on failure
         if: failure()
@@ -98,16 +86,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Start Docker infrastructure
-        run: |
-          cd zenoh-recorder
-          docker-compose -f docker-compose.test.yml up -d
+        run: docker-compose -f docker-compose.test.yml up -d
       
       - name: Wait for services
         run: sleep 30
       
       - name: Run tests with stress testing
         run: |
-          cd zenoh-recorder
           # Run tests multiple times to catch race conditions
           for i in {1..5}; do
             echo "Test iteration $i"
@@ -119,7 +104,5 @@ jobs:
       
       - name: Cleanup
         if: always()
-        run: |
-          cd zenoh-recorder
-          docker-compose -f docker-compose.test.yml down -v
+        run: docker-compose -f docker-compose.test.yml down -v
 

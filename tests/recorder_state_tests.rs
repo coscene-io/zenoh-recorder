@@ -362,7 +362,7 @@ async fn test_manager_handles_errors_gracefully() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     // Should handle error gracefully (either succeed or return error response)
     assert!(response.success || !response.success);
     if !response.success {
@@ -400,9 +400,8 @@ fn test_all_compression_levels() {
     for level in levels {
         let zstd = level.to_zstd_level();
         let lz4 = level.to_lz4_level();
-        
+
         assert!(zstd >= 1 && zstd <= 19);
         assert!(lz4 >= 1 && lz4 <= 12);
     }
 }
-

@@ -47,10 +47,8 @@ fn test_client_creation_various_buckets() {
     ];
 
     for bucket in buckets {
-        let client = ReductStoreClient::new(
-            "http://localhost:8383".to_string(),
-            bucket.to_string(),
-        );
+        let client =
+            ReductStoreClient::new("http://localhost:8383".to_string(), bucket.to_string());
         drop(client);
     }
 }
@@ -61,24 +59,24 @@ fn test_topic_conversion_comprehensive() {
     assert_eq!(topic_to_entry_name("/camera/front"), "camera_front");
     assert_eq!(topic_to_entry_name("/camera/back"), "camera_back");
     assert_eq!(topic_to_entry_name("/lidar/top"), "lidar_top");
-    
+
     // Deep nesting
     assert_eq!(topic_to_entry_name("/a/b/c/d/e/f"), "a_b_c_d_e_f");
-    
+
     // Special characters
     assert_eq!(topic_to_entry_name("/topic-dash"), "topic-dash");
     assert_eq!(topic_to_entry_name("/topic_underscore"), "topic_underscore");
     assert_eq!(topic_to_entry_name("/topic.dot"), "topic.dot");
-    
+
     // Numbers
     assert_eq!(topic_to_entry_name("/sensor/1"), "sensor_1");
     assert_eq!(topic_to_entry_name("/123/456"), "123_456");
-    
+
     // Wildcards
     assert_eq!(topic_to_entry_name("/test/*"), "test_*");
     assert_eq!(topic_to_entry_name("/test/**"), "test_all");
     assert_eq!(topic_to_entry_name("/**"), "all");
-    
+
     // Edge cases
     assert_eq!(topic_to_entry_name(""), "");
     assert_eq!(topic_to_entry_name("/"), "");
@@ -87,17 +85,16 @@ fn test_topic_conversion_comprehensive() {
 
 #[test]
 fn test_topic_conversion_idempotent() {
-    let topics = vec![
-        "/camera/front",
-        "/lidar/points",
-        "/imu/data",
-        "/test/**",
-    ];
+    let topics = vec!["/camera/front", "/lidar/points", "/imu/data", "/test/**"];
 
     for topic in topics {
         let result1 = topic_to_entry_name(topic);
         let result2 = topic_to_entry_name(topic);
-        assert_eq!(result1, result2, "Conversion should be idempotent for {}", topic);
+        assert_eq!(
+            result1, result2,
+            "Conversion should be idempotent for {}",
+            topic
+        );
     }
 }
 
@@ -177,7 +174,7 @@ fn test_topic_conversion_preserves_info() {
     // Entry name should contain enough info to reconstruct topic
     let topic = "/camera/front/left";
     let entry = topic_to_entry_name(topic);
-    
+
     assert!(entry.contains("camera"));
     assert!(entry.contains("front"));
     assert!(entry.contains("left"));
@@ -236,7 +233,7 @@ fn test_topic_with_multiple_slashes() {
 fn test_very_long_topic_names() {
     let long_topic = format!("/{}", "segment/".repeat(20));
     let entry = topic_to_entry_name(&long_topic);
-    
+
     assert!(entry.len() > 0);
     assert!(entry.contains("segment"));
 }
@@ -244,15 +241,10 @@ fn test_very_long_topic_names() {
 #[test]
 fn test_unicode_in_topics() {
     // ReductStore may or may not support Unicode, but conversion shouldn't panic
-    let topics = vec![
-        "/test/日本語",
-        "/тест/topic",
-        "/test/🚀",
-    ];
+    let topics = vec!["/test/日本語", "/тест/topic", "/test/🚀"];
 
     for topic in topics {
         let _entry = topic_to_entry_name(topic);
         // Should not panic
     }
 }
-

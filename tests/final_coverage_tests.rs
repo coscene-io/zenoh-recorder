@@ -57,7 +57,7 @@ async fn test_buffer_exact_size_trigger() {
     buffer.push_sample(sample).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
-    
+
     assert!(flush_queue.len() > 0 || buffer.stats().1 == 0);
 }
 
@@ -78,7 +78,7 @@ async fn test_buffer_just_under_size_trigger() {
     buffer.push_sample(sample).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
-    
+
     // Should NOT have flushed
     let (samples, _) = buffer.stats();
     assert_eq!(samples, 1);
@@ -109,10 +109,10 @@ async fn test_recording_with_single_topic() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         // Check status multiple times
         for _ in 0..3 {
             let status = manager.get_status(rec_id).await;
@@ -122,7 +122,7 @@ async fn test_recording_with_single_topic() {
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        
+
         manager.finish_recording(rec_id).await;
     }
 }
@@ -151,33 +151,33 @@ async fn test_pause_resume_multiple_times() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(50)).await;
-        
+
         // Multiple pause/resume cycles
         for cycle in 0..5 {
             let pause_resp = manager.pause_recording(rec_id).await;
             if !pause_resp.success {
                 break;
             }
-            
+
             tokio::time::sleep(Duration::from_millis(10)).await;
-            
+
             let resume_resp = manager.resume_recording(rec_id).await;
             if !resume_resp.success {
                 break;
             }
-            
+
             tokio::time::sleep(Duration::from_millis(10)).await;
-            
+
             // Verify state after each cycle
             let status = manager.get_status(rec_id).await;
             if status.success && cycle < 4 {
                 assert_eq!(status.status, RecordingStatus::Recording);
             }
         }
-        
+
         manager.cancel_recording(rec_id).await;
     }
 }
@@ -185,7 +185,8 @@ async fn test_pause_resume_multiple_times() {
 // Storage tests
 #[test]
 fn test_topic_to_entry_all_ascii() {
-    for c in 33u8..127u8 { // All printable ASCII
+    for c in 33u8..127u8 {
+        // All printable ASCII
         if c == b'/' {
             continue; // Skip slash
         }
@@ -197,10 +198,7 @@ fn test_topic_to_entry_all_ascii() {
 
 #[test]
 fn test_reductstore_client_drop() {
-    let client = ReductStoreClient::new(
-        "http://localhost:8383".to_string(),
-        "test".to_string(),
-    );
+    let client = ReductStoreClient::new("http://localhost:8383".to_string(), "test".to_string());
     drop(client); // Explicit drop
 }
 
@@ -245,7 +243,7 @@ fn test_empty_skills_array() {
 #[test]
 fn test_very_long_strings() {
     let long_string = "a".repeat(10000);
-    
+
     let request = RecorderRequest {
         command: RecorderCommand::Start,
         recording_id: Some(long_string.clone()),
@@ -268,7 +266,7 @@ fn test_very_long_strings() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multiple_managers_same_bucket() {
     let session = create_session().await;
-    
+
     // Create multiple managers for same bucket
     let managers: Vec<_> = (0..3)
         .map(|_| {
@@ -311,27 +309,23 @@ fn test_metadata_with_empty_per_topic_stats() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_with_different_keys() {
     let session = create_session().await;
-    
+
     let devices = vec!["dev-a", "dev-b", "dev-c", "dev-d", "dev-e"];
-    
+
     for device in devices {
         let manager = Arc::new(RecorderManager::new(
             session.clone(),
             "http://localhost:8383".to_string(),
             "bucket".to_string(),
         ));
-        
-        let control = ControlInterface::new(
-            session.clone(),
-            manager,
-            device.to_string(),
-        );
-        
+
+        let control = ControlInterface::new(session.clone(), manager, device.to_string());
+
         // Spawn and immediately abort to test creation
         let handle = tokio::spawn(async move {
             tokio::time::timeout(Duration::from_millis(100), control.run()).await
         });
-        
+
         tokio::time::sleep(Duration::from_millis(50)).await;
         handle.abort();
     }
@@ -361,7 +355,7 @@ async fn test_recording_with_slowest_compression() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(100)).await;
         manager.cancel_recording(rec_id).await;
@@ -392,7 +386,7 @@ async fn test_recording_with_fastest_compression() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(100)).await;
         manager.cancel_recording(rec_id).await;
@@ -432,7 +426,7 @@ async fn test_buffer_1_second_duration() {
 
     // Wait for duration to elapse
     tokio::time::sleep(Duration::from_secs(2)).await;
-    
+
     // Force flush to trigger time-based logic
     buffer.force_flush().await.unwrap();
 }
@@ -441,7 +435,7 @@ async fn test_buffer_1_second_duration() {
 #[test]
 fn test_mcap_with_single_byte_samples() {
     let serializer = McapSerializer::new(CompressionType::None, CompressionLevel::Default);
-    
+
     let samples: Vec<Sample> = (0..100)
         .map(|i| create_sample("test/topic", vec![i as u8]))
         .collect();
@@ -453,14 +447,14 @@ fn test_mcap_with_single_byte_samples() {
 #[test]
 fn test_mcap_with_max_compression() {
     let serializer = McapSerializer::new(CompressionType::Zstd, CompressionLevel::Slowest);
-    
+
     // Highly repetitive data for maximum compression
     let data = vec![0u8; 100000];
     let sample = create_sample("test/topic", data);
-    
+
     let result = serializer.serialize_batch("/test/topic", vec![sample], "rec-max-comp");
     assert!(result.is_ok());
-    
+
     let compressed = result.unwrap();
     assert!(compressed.len() < 100000); // Should compress significantly
     assert!(compressed.len() < 1000); // Should compress to < 1KB for zeros
@@ -491,16 +485,16 @@ async fn test_finish_recording_twice() {
     };
 
     let response = manager.start_recording(request).await;
-    
+
     if let Some(rec_id) = &response.recording_id {
         tokio::time::sleep(Duration::from_millis(50)).await;
-        
+
         // First finish
         let finish1 = manager.finish_recording(rec_id).await;
-        
+
         if finish1.success {
             tokio::time::sleep(Duration::from_millis(100)).await;
-            
+
             // Second finish should still work (idempotent)
             let finish2 = manager.finish_recording(rec_id).await;
             assert!(finish2.success || !finish2.success);
@@ -604,10 +598,8 @@ fn test_recording_status_debug() {
 
 #[test]
 fn test_response_clone() {
-    let response = RecorderResponse::success(
-        Some("rec-123".to_string()),
-        Some("bucket".to_string()),
-    );
+    let response =
+        RecorderResponse::success(Some("rec-123".to_string()), Some("bucket".to_string()));
 
     let cloned = response.clone();
     assert_eq!(cloned.success, response.success);
@@ -680,4 +672,3 @@ fn test_metadata_clone() {
     let cloned = metadata.clone();
     assert_eq!(cloned.recording_id, metadata.recording_id);
 }
-

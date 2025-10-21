@@ -40,7 +40,7 @@ struct Args {
     /// Path to configuration file
     #[arg(short, long, default_value = "config/default.yaml")]
     config: PathBuf,
-    
+
     /// Device ID (overrides config file)
     #[arg(short, long)]
     device_id: Option<String>,
@@ -55,15 +55,15 @@ pub mod proto {
 async fn main() -> Result<()> {
     // Parse CLI arguments
     let args = Args::parse();
-    
+
     // Load configuration from file
     let mut recorder_config = load_config_with_env(&args.config)?;
-    
+
     // Apply CLI overrides
     if let Some(device_id) = args.device_id {
         recorder_config.recorder.device_id = device_id;
     }
-    
+
     // Initialize tracing with configured level
     let log_level = match recorder_config.logging.level.to_lowercase().as_str() {
         "trace" => Level::TRACE,
@@ -73,10 +73,8 @@ async fn main() -> Result<()> {
         "error" => Level::ERROR,
         _ => Level::INFO,
     };
-    
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(log_level)
-        .finish();
+
+    let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
     info!("Starting Zenoh Recorder");
@@ -86,7 +84,7 @@ async fn main() -> Result<()> {
 
     // Build Zenoh config
     let mut zenoh_config = Config::default();
-    
+
     // Set mode
     match recorder_config.zenoh.mode.as_str() {
         "peer" => zenoh_config.set_mode(Some(WhatAmI::Peer))?,
@@ -94,7 +92,7 @@ async fn main() -> Result<()> {
         "router" => zenoh_config.set_mode(Some(WhatAmI::Router))?,
         _ => zenoh_config.set_mode(Some(WhatAmI::Peer))?,
     }
-    
+
     // Set connect endpoints
     if let Some(connect_config) = &recorder_config.zenoh.connect {
         let endpoints: Vec<zenoh_config::EndPoint> = connect_config
@@ -104,7 +102,7 @@ async fn main() -> Result<()> {
             .collect();
         zenoh_config.connect.endpoints.set(endpoints)?;
     }
-    
+
     // Set listen endpoints
     if let Some(listen_config) = &recorder_config.zenoh.listen {
         let endpoints: Vec<zenoh_config::EndPoint> = listen_config
@@ -127,8 +125,11 @@ async fn main() -> Result<()> {
 
     // Create storage backend
     let storage_backend = BackendFactory::create(&recorder_config.storage)?;
-    info!("Storage backend initialized: {}", storage_backend.backend_type());
-    
+    info!(
+        "Storage backend initialized: {}",
+        storage_backend.backend_type()
+    );
+
     // Initialize storage backend
     storage_backend.initialize().await?;
 

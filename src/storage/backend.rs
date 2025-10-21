@@ -19,19 +19,19 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 
 /// Generic storage backend trait for write-only recording
-/// 
+///
 /// This trait defines the interface for storage backends that the recorder
 /// can write data to. Implementations should focus on efficient writes.
-/// 
+///
 /// Query operations are NOT part of this trait - users should query
 /// backends directly using their specialized tools (ReductStore UI, Grafana, etc.)
 #[async_trait]
 pub trait StorageBackend: Send + Sync {
     /// Initialize the backend (create bucket/database if needed)
     async fn initialize(&self) -> Result<()>;
-    
+
     /// Write a single record with metadata
-    /// 
+    ///
     /// # Arguments
     /// * `entry_name` - Entry/stream name for the data
     /// * `timestamp_us` - Timestamp in microseconds
@@ -44,9 +44,9 @@ pub trait StorageBackend: Send + Sync {
         data: Vec<u8>,
         labels: HashMap<String, String>,
     ) -> Result<()>;
-    
+
     /// Write with retry logic (optional, has default implementation)
-    /// 
+    ///
     /// # Arguments
     /// * `entry_name` - Entry/stream name for the data
     /// * `timestamp_us` - Timestamp in microseconds
@@ -63,7 +63,7 @@ pub trait StorageBackend: Send + Sync {
     ) -> Result<()> {
         use tokio::time::{sleep, Duration};
         use tracing::{info, warn};
-        
+
         let mut attempt = 0;
         let mut delay = Duration::from_millis(100);
 
@@ -98,18 +98,19 @@ pub trait StorageBackend: Send + Sync {
                 Err(e) => {
                     tracing::error!(
                         "Upload to entry '{}' failed after {} attempts: {}",
-                        entry_name, max_retries, e
+                        entry_name,
+                        max_retries,
+                        e
                     );
                     return Err(e);
                 }
             }
         }
     }
-    
+
     /// Health check
     async fn health_check(&self) -> Result<bool>;
-    
+
     /// Get backend type identifier
     fn backend_type(&self) -> &str;
 }
-

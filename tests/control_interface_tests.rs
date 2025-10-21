@@ -44,7 +44,7 @@ async fn test_control_interface_creation() {
     ));
 
     let control = ControlInterface::new(session.clone(), manager, "test-device".to_string());
-    
+
     // Just verify it can be created
     drop(control);
 }
@@ -59,10 +59,10 @@ async fn test_control_interface_run_timeout() {
     ));
 
     let control = ControlInterface::new(session.clone(), manager, "test-device-2".to_string());
-    
+
     // Run with timeout to avoid blocking forever
     let result = tokio::time::timeout(Duration::from_millis(500), control.run()).await;
-    
+
     // Should timeout since there are no queries
     assert!(result.is_err(), "Control interface should timeout");
 }
@@ -78,18 +78,24 @@ async fn test_control_interface_with_query() {
 
     let device_id = "test-device-query";
     let control = ControlInterface::new(session.clone(), manager.clone(), device_id.to_string());
-    
+
     // Spawn control interface in background
-    let control_handle = tokio::spawn(async move {
-        tokio::time::timeout(Duration::from_secs(2), control.run()).await
-    });
+    let control_handle =
+        tokio::spawn(
+            async move { tokio::time::timeout(Duration::from_secs(2), control.run()).await },
+        );
 
     // Give it time to start
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Try to query status (should get error for nonexistent recording)
     let status_key = "recorder/status/nonexistent-123";
-    if let Ok(replies) = session.get(status_key).res().await.map_err(|e| format!("{}", e)) {
+    if let Ok(replies) = session
+        .get(status_key)
+        .res()
+        .await
+        .map_err(|e| format!("{}", e))
+    {
         tokio::time::timeout(Duration::from_millis(500), async {
             while let Ok(reply) = replies.recv_async().await {
                 match reply.sample {
@@ -116,7 +122,7 @@ async fn test_control_interface_with_query() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multiple_control_interfaces() {
     let session = create_test_session().await.unwrap();
-    
+
     // Create multiple control interfaces for different devices
     let devices = vec!["device-1", "device-2", "device-3"];
     let mut interfaces = Vec::new();
@@ -128,11 +134,7 @@ async fn test_multiple_control_interfaces() {
             format!("bucket_{}", device),
         ));
 
-        let control = ControlInterface::new(
-            session.clone(),
-            manager,
-            device.to_string(),
-        );
+        let control = ControlInterface::new(session.clone(), manager, device.to_string());
 
         interfaces.push(control);
     }
@@ -207,4 +209,3 @@ fn test_status_response_all_states() {
         assert_eq!(deserialized.status, state);
     }
 }
-

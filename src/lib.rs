@@ -31,7 +31,7 @@ pub mod storage;
 
 // Re-export main types
 pub use buffer::{FlushTask, TopicBuffer};
-pub use config::{RecorderConfig, load_config, load_config_with_env};
+pub use config::{load_config, load_config_with_env, RecorderConfig};
 pub use control::ControlInterface;
 pub use mcap_writer::McapSerializer;
 pub use protocol::{

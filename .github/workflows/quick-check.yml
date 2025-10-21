@@ -29,22 +29,14 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Check formatting
-        run: |
-          cd zenoh-recorder
-          cargo fmt --all -- --check
+        run: cargo fmt --all -- --check
       
       - name: Run clippy
-        run: |
-          cd zenoh-recorder
-          cargo clippy --all-features --all-targets -- -D warnings
+        run: cargo clippy --all-features --all-targets -- -D warnings
       
       - name: Build check
-        run: |
-          cd zenoh-recorder
-          cargo build --all-features
+        run: cargo build --all-features
       
       - name: Run fast unit tests
-        run: |
-          cd zenoh-recorder
-          cargo test --lib control_unit_tests edge_case_coverage_tests protocol_tests
+        run: cargo test --lib control_unit_tests edge_case_coverage_tests protocol_tests
 

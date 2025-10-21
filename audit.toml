@@ -1,0 +1,28 @@
+# Cargo-audit configuration for zenoh-recorder
+# 
+# These advisories are from transitive dependencies of zenoh 0.11
+# and will be resolved when Zenoh updates to newer versions.
+# See SECURITY.md for detailed risk assessment.
+
+[advisories]
+# Ignore specific advisories with justification
+ignore = [
+    # async-std: unmaintained but functional, used by zenoh internally
+    "RUSTSEC-2025-0052",
+    # instant: unmaintained but no security impact
+    "RUSTSEC-2024-0384", 
+    # paste: unmaintained but works, compile-time only
+    "RUSTSEC-2024-0436",
+    # ring 0.16: unmaintained, waiting for zenoh to update to 0.17+
+    "RUSTSEC-2025-0010",
+    # ring AES: only affects debug builds with overflow-checks, not production
+    "RUSTSEC-2025-0009",
+    # RSA: transitive only, not used by zenoh-recorder functionality
+    "RUSTSEC-2023-0071",
+]
+
+# Don't treat informational warnings as errors
+unmaintained = "warn"
+unsound = "warn" 
+notice = "warn"
+

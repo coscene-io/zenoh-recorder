@@ -18,8 +18,9 @@ use crossbeam::queue::ArrayQueue;
 use std::sync::Arc;
 use std::time::Duration;
 use zenoh::key_expr::KeyExpr;
-use zenoh::prelude::r#async::*;
 use zenoh::sample::Sample;
+use zenoh::Config;
+use zenoh::Wait;
 use zenoh_recorder::buffer::TopicBuffer;
 use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
@@ -29,13 +30,14 @@ use zenoh_recorder::recorder::RecorderManager;
 use zenoh_recorder::storage::{BackendFactory, ReductStoreBackend};
 
 fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
+    use zenoh::sample::SampleBuilder;
     let key: KeyExpr<'static> = topic.try_into().unwrap();
-    Sample::new(key, data)
+    SampleBuilder::put(key, data).into()
 }
 
-async fn create_session() -> Arc<zenoh::Session> {
+fn create_session() -> Arc<zenoh::Session> {
     let config = Config::default();
-    Arc::new(zenoh::open(config).res().await.unwrap())
+    Arc::new(zenoh::open(config).wait().unwrap())
 }
 
 fn create_test_recorder_manager(
@@ -166,7 +168,7 @@ fn test_mcap_with_huge_sample_count() {
 // Recorder edge cases
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_double_pause() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -207,7 +209,7 @@ async fn test_double_pause() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_resume_without_pause() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -243,7 +245,7 @@ async fn test_resume_without_pause() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_finish_after_cancel() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -391,7 +393,7 @@ fn test_recording_metadata_json_serialization() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_device_ids() {
-    let session = create_session().await;
+    let session = create_session();
 
     let device_ids = vec!["device-1", "device-2", "device-3"];
 
@@ -432,7 +434,7 @@ fn test_recording_status_copy_trait() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recorder_with_all_compression_types() {
-    let session = create_session().await;
+    let session = create_session();
 
     let compression_types = vec![
         CompressionType::None,
@@ -502,7 +504,7 @@ fn test_mcap_alternating_data_sizes() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_shutdown_with_active_recordings() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),

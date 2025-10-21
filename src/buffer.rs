@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
-use zenoh::prelude::Buffer;
 use zenoh::sample::Sample;
 
 /// Message to flush buffer
@@ -90,7 +89,7 @@ impl TopicBuffer {
             &self.back_buffer
         };
 
-        let sample_size = sample.payload.len();
+        let sample_size = sample.payload().len();
 
         {
             let mut buf = buffer.write().await;
@@ -156,7 +155,7 @@ impl TopicBuffer {
         };
 
         let sample_count = samples.len();
-        let bytes = samples.iter().map(|s| s.payload.len()).sum::<usize>();
+        let bytes = samples.iter().map(|s| s.payload().len()).sum::<usize>();
 
         // Reset counters
         self.total_samples.store(0, Ordering::Relaxed);

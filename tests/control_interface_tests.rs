@@ -19,7 +19,8 @@
 ///
 use std::sync::Arc;
 use std::time::Duration;
-use zenoh::prelude::r#async::*;
+use zenoh::Config;
+use zenoh::Wait;
 use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
 use zenoh_recorder::protocol::*;
@@ -27,11 +28,10 @@ use zenoh_recorder::recorder::RecorderManager;
 use zenoh_recorder::storage::BackendFactory;
 
 /// Helper to create a test session
-async fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
+fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
     let config = Config::default();
     zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map(Arc::new)
         .map_err(|e| format!("{}", e))
 }
@@ -67,7 +67,7 @@ fn create_test_recorder_manager(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_creation() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
     let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
@@ -82,7 +82,7 @@ async fn test_control_interface_creation() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_run_timeout() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
     let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
@@ -100,7 +100,7 @@ async fn test_control_interface_run_timeout() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_with_query() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
     let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
@@ -121,18 +121,13 @@ async fn test_control_interface_with_query() {
 
     // Try to query status (should get error for nonexistent recording)
     let status_key = "recorder/status/nonexistent-123";
-    if let Ok(replies) = session
-        .get(status_key)
-        .res()
-        .await
-        .map_err(|e| format!("{}", e))
-    {
+    if let Ok(replies) = session.get(status_key).wait().map_err(|e| format!("{}", e)) {
         tokio::time::timeout(Duration::from_millis(500), async {
             while let Ok(reply) = replies.recv_async().await {
-                match reply.sample {
+                match reply.into_result() {
                     Ok(sample) => {
                         let response: Result<StatusResponse, _> =
-                            serde_json::from_slice(&sample.payload.contiguous());
+                            serde_json::from_slice(&sample.payload().to_bytes());
                         if let Ok(resp) = response {
                             assert!(!resp.success);
                             break;
@@ -152,7 +147,7 @@ async fn test_control_interface_with_query() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multiple_control_interfaces() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
 
     // Create multiple control interfaces for different devices
     let devices = vec!["device-1", "device-2", "device-3"];

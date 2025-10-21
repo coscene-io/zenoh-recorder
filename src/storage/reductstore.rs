@@ -112,10 +112,12 @@ impl StorageBackend for ReductStoreBackend {
             self.base_url, self.bucket_name, entry_name, timestamp_us
         );
 
+        let data_len = data.len();
         let mut request = self
             .client
             .post(&url)
-            .header("Content-Type", "application/octet-stream");
+            .header("Content-Type", "application/mcap")
+            .header("Content-Length", data_len.to_string());
 
         // Add labels as headers
         for (key, value) in labels {

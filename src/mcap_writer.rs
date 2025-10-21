@@ -34,7 +34,6 @@ use anyhow::{Context, Result};
 use prost::Message;
 use std::io::Write;
 use tracing::debug;
-use zenoh::prelude::SplitBuffer;
 use zenoh::sample::Sample;
 
 use crate::config::SchemaConfig;
@@ -174,7 +173,7 @@ impl McapSerializer {
         // Encode all samples to protobuf
         for sample in &samples {
             let timestamp = sample
-                .timestamp
+                .timestamp()
                 .as_ref()
                 .map(|ts| ts.get_time().as_u64())
                 .unwrap_or_else(|| {
@@ -189,7 +188,7 @@ impl McapSerializer {
             let recorded_msg = crate::proto::RecordedMessage {
                 topic: topic.to_string(),
                 timestamp_ns: timestamp as i64,
-                payload: sample.payload.contiguous().to_vec(),
+                payload: sample.payload().to_bytes().to_vec(),
                 schema: schema_info,
             };
 

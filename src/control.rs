@@ -15,9 +15,9 @@
 use anyhow::Result;
 use std::sync::Arc;
 use tracing::{error, info};
-use zenoh::prelude::r#async::*;
-use zenoh::queryable::Query;
+use zenoh::query::Query;
 use zenoh::Session;
+use zenoh::Wait;
 
 use crate::protocol::{RecorderCommand, RecorderRequest, RecorderResponse, StatusResponse};
 use crate::recorder::RecorderManager;
@@ -49,8 +49,7 @@ impl ControlInterface {
         let queryable = self
             .session
             .declare_queryable(&control_key)
-            .res()
-            .await
+            .wait()
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         info!("Control interface listening on '{}'", control_key);
@@ -60,8 +59,7 @@ impl ControlInterface {
         let status_queryable = self
             .session
             .declare_queryable(status_key)
-            .res()
-            .await
+            .wait()
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         info!("Status interface listening on '{}'", status_key);
@@ -95,16 +93,14 @@ impl ControlInterface {
     ) -> Result<()> {
         info!("Received control query on '{}'", query.selector());
 
-        // Parse request from query value (payload is in query.value().payload in v0.11)
-        let request: RecorderRequest = if let Some(value) = query.value() {
-            let bytes = value.payload.contiguous();
-            serde_json::from_slice(&bytes)?
+        // Parse request from query payload
+        let request: RecorderRequest = if let Some(payload) = query.payload() {
+            serde_json::from_slice(&payload.to_bytes())?
         } else {
             let response = RecorderResponse::error("Missing request payload".to_string());
             let response_bytes = serde_json::to_vec(&response)?;
             query
-                .reply(Ok(Sample::new(query.key_expr().clone(), response_bytes)))
-                .res()
+                .reply(query.key_expr().clone(), response_bytes)
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             return Ok(());
@@ -140,8 +136,7 @@ impl ControlInterface {
         // Send response
         let response_bytes = serde_json::to_vec(&response)?;
         query
-            .reply(Ok(Sample::new(query.key_expr().clone(), response_bytes)))
-            .res()
+            .reply(query.key_expr().clone(), response_bytes)
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
@@ -174,8 +169,7 @@ impl ControlInterface {
             };
             let response_bytes = serde_json::to_vec(&response)?;
             query
-                .reply(Ok(Sample::new(query.key_expr().clone(), response_bytes)))
-                .res()
+                .reply(query.key_expr().clone(), response_bytes)
                 .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             return Ok(());
@@ -189,8 +183,7 @@ impl ControlInterface {
         // Send response
         let response_bytes = serde_json::to_vec(&response)?;
         query
-            .reply(Ok(Sample::new(query.key_expr().clone(), response_bytes)))
-            .res()
+            .reply(query.key_expr().clone(), response_bytes)
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 

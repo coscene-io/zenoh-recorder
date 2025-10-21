@@ -20,8 +20,9 @@ use crossbeam::queue::ArrayQueue;
 use std::sync::Arc;
 use std::time::Duration;
 use zenoh::key_expr::KeyExpr;
-use zenoh::prelude::r#async::*;
 use zenoh::sample::Sample;
+use zenoh::Config;
+use zenoh::Wait;
 use zenoh_recorder::buffer::{FlushTask, TopicBuffer};
 use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
@@ -31,13 +32,14 @@ use zenoh_recorder::recorder::RecorderManager;
 use zenoh_recorder::storage::{topic_to_entry_name, BackendFactory, ReductStoreBackend};
 
 fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
+    use zenoh::sample::SampleBuilder;
     let key: KeyExpr<'static> = topic.try_into().unwrap();
-    Sample::new(key, data)
+    SampleBuilder::put(key, data).into()
 }
 
-async fn create_session() -> Arc<zenoh::Session> {
+fn create_session() -> Arc<zenoh::Session> {
     let config = Config::default();
-    Arc::new(zenoh::open(config).res().await.unwrap())
+    Arc::new(zenoh::open(config).wait().unwrap())
 }
 
 fn create_test_recorder_manager(
@@ -117,7 +119,7 @@ async fn test_buffer_just_under_size_trigger() {
 // Recorder comprehensive tests
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recording_with_single_topic() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -159,7 +161,7 @@ async fn test_recording_with_single_topic() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pause_resume_multiple_times() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -304,7 +306,7 @@ fn test_very_long_strings() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multiple_managers_same_bucket() {
-    let session = create_session().await;
+    let session = create_session();
 
     // Create multiple managers for same bucket
     let managers: Vec<_> = (0..3)
@@ -347,7 +349,7 @@ fn test_metadata_with_empty_per_topic_stats() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_with_different_keys() {
-    let session = create_session().await;
+    let session = create_session();
 
     let devices = vec!["dev-a", "dev-b", "dev-c", "dev-d", "dev-e"];
 
@@ -372,7 +374,7 @@ async fn test_control_interface_with_different_keys() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recording_with_slowest_compression() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -403,7 +405,7 @@ async fn test_recording_with_slowest_compression() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recording_with_fastest_compression() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -502,7 +504,7 @@ fn test_mcap_with_max_compression() {
 // Recorder state edge cases
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_finish_recording_twice() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),

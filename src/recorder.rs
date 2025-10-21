@@ -21,8 +21,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use zenoh::prelude::r#async::*;
 use zenoh::Session;
+use zenoh::Wait;
 
 use crate::buffer::{FlushTask, TopicBuffer};
 use crate::config::RecorderConfig;
@@ -145,7 +145,7 @@ impl RecorderManager {
             let topic_clone = topic.clone();
 
             tokio::spawn(async move {
-                match session.declare_subscriber(&topic_clone).res().await {
+                match session.declare_subscriber(&topic_clone).wait() {
                     Ok(subscriber) => {
                         info!(
                             "Subscribed to topic '{}' for recording '{}'",

@@ -19,8 +19,9 @@ use zenoh_recorder::protocol::{CompressionLevel, CompressionType};
 
 // Helper function to create samples
 fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
+    use zenoh::sample::SampleBuilder;
     let key: KeyExpr<'static> = topic.try_into().unwrap();
-    Sample::new(key, data)
+    SampleBuilder::put(key, data).into()
 }
 
 #[test]

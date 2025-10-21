@@ -20,8 +20,9 @@ use zenoh::sample::Sample;
 use zenoh_recorder::buffer::{FlushTask, TopicBuffer};
 
 fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
+    use zenoh::sample::SampleBuilder;
     let key: KeyExpr<'static> = topic.try_into().unwrap();
-    Sample::new(key, data)
+    SampleBuilder::put(key, data).into()
 }
 
 #[tokio::test]

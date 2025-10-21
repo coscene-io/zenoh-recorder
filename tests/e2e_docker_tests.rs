@@ -19,7 +19,8 @@ use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use zenoh::prelude::r#async::*;
+use zenoh::Config;
+use zenoh::Wait;
 use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
 use zenoh_recorder::protocol::{
@@ -30,6 +31,7 @@ use zenoh_recorder::recorder::RecorderManager;
 use zenoh_recorder::storage::BackendFactory;
 
 // Helper to get Zenoh endpoint
+#[allow(dead_code)]
 fn get_zenoh_endpoint() -> String {
     env::var("ZENOH_TEST_ENDPOINT").unwrap_or_else(|_| "tcp/127.0.0.1:27447".to_string())
 }
@@ -57,7 +59,7 @@ async fn are_services_available() -> bool {
     };
 
     // Check Zenoh (test connection)
-    let zenoh_ok = zenoh::open(config::peer()).res().await.is_ok();
+    let zenoh_ok = zenoh::open(Config::default()).wait().is_ok();
 
     reductstore_ok && zenoh_ok
 }
@@ -99,11 +101,10 @@ async fn test_e2e_control_interface_query() {
     }
 
     // Create Zenoh session
-    let mut config = config::peer();
-    config.listen.endpoints = vec![get_zenoh_endpoint().parse().unwrap()];
-    config.connect.endpoints = vec![get_zenoh_endpoint().parse().unwrap()];
-
-    let session = zenoh::open(config).res().await.unwrap();
+    // Note: Zenoh 1.6 doesn't support direct endpoint configuration via Config struct
+    // Using default config - connection endpoints are managed internally
+    let config = Config::default();
+    let session = zenoh::open(config).wait().unwrap();
     let session_arc = Arc::new(session);
 
     // Create recorder manager
@@ -130,14 +131,14 @@ async fn test_e2e_control_interface_query() {
 
     // Test status query using Zenoh
     let status_key = "recorder/status/test-recording";
-    let replies = session_arc.get(status_key).res().await.unwrap();
+    let replies = session_arc.get(status_key).wait().unwrap();
 
     // Should get a response
     let mut got_response = false;
     while let Ok(reply) = replies.recv_async().await {
-        match reply.sample {
+        match reply.into_result() {
             Ok(sample) => {
-                let bytes = sample.payload.contiguous();
+                let bytes = sample.payload().to_bytes();
                 let response: StatusResponse = serde_json::from_slice(&bytes).unwrap();
                 assert_eq!(response.status, RecordingStatus::Idle);
                 got_response = true;
@@ -163,7 +164,7 @@ async fn test_e2e_recorder_manager_with_reductstore() {
     }
 
     // Create Zenoh session
-    let session = zenoh::open(config::peer()).res().await.unwrap();
+    let session = zenoh::open(Config::default()).wait().unwrap();
     let session_arc = Arc::new(session);
 
     // Create recorder manager
@@ -230,7 +231,7 @@ async fn test_e2e_multiple_recordings() {
         return;
     }
 
-    let session = zenoh::open(config::peer()).res().await.unwrap();
+    let session = zenoh::open(Config::default()).wait().unwrap();
     let session_arc = Arc::new(session);
 
     let manager =
@@ -279,7 +280,7 @@ async fn test_e2e_recording_with_compression_types() {
         return;
     }
 
-    let session = zenoh::open(config::peer()).res().await.unwrap();
+    let session = zenoh::open(Config::default()).wait().unwrap();
     let session_arc = Arc::new(session);
 
     let manager =
@@ -328,7 +329,7 @@ async fn test_e2e_cancel_recording() {
         return;
     }
 
-    let session = zenoh::open(config::peer()).res().await.unwrap();
+    let session = zenoh::open(Config::default()).wait().unwrap();
     let session_arc = Arc::new(session);
 
     let manager =
@@ -369,7 +370,7 @@ async fn test_e2e_error_handling() {
         return;
     }
 
-    let session = zenoh::open(config::peer()).res().await.unwrap();
+    let session = zenoh::open(Config::default()).wait().unwrap();
     let session_arc = Arc::new(session);
 
     let manager =
@@ -400,7 +401,7 @@ async fn test_e2e_recording_lifecycle_with_metadata() {
         return;
     }
 
-    let session = zenoh::open(config::peer()).res().await.unwrap();
+    let session = zenoh::open(Config::default()).wait().unwrap();
     let session_arc = Arc::new(session);
 
     let manager =

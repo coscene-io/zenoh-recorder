@@ -22,7 +22,8 @@
 ///
 use std::sync::Arc;
 use std::time::Duration;
-use zenoh::prelude::r#async::*;
+use zenoh::Config;
+use zenoh::Wait;
 use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::protocol::*;
 use zenoh_recorder::recorder::RecorderManager;
@@ -62,8 +63,7 @@ async fn test_recorder_manager_creation() {
     // Open a Zenoh session
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 
@@ -81,8 +81,7 @@ async fn test_recorder_manager_creation() {
 async fn test_start_recording() {
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 
@@ -116,8 +115,7 @@ async fn test_start_recording() {
 async fn test_pause_nonexistent_recording() {
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 
@@ -137,8 +135,7 @@ async fn test_pause_nonexistent_recording() {
 async fn test_resume_nonexistent_recording() {
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 
@@ -158,8 +155,7 @@ async fn test_resume_nonexistent_recording() {
 async fn test_cancel_nonexistent_recording() {
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 
@@ -178,8 +174,7 @@ async fn test_cancel_nonexistent_recording() {
 async fn test_finish_nonexistent_recording() {
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 
@@ -198,8 +193,7 @@ async fn test_finish_nonexistent_recording() {
 async fn test_get_status_nonexistent() {
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 
@@ -219,8 +213,7 @@ async fn test_get_status_nonexistent() {
 async fn test_manager_shutdown() {
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 
@@ -239,8 +232,7 @@ async fn test_manager_shutdown() {
 async fn test_recording_lifecycle() {
     let config = Config::default();
     let session = zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map_err(|e| format!("{}", e))
         .unwrap();
 

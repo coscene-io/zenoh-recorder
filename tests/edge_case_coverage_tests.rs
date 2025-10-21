@@ -14,12 +14,15 @@
 
 // Edge case tests to improve coverage for mcap_writer.rs and other modules
 
-use zenoh::prelude::r#async::*;
+use zenoh::key_expr::KeyExpr;
+use zenoh::sample::Sample;
 use zenoh_recorder::mcap_writer::McapSerializer;
 use zenoh_recorder::protocol::{CompressionLevel, CompressionType};
 
 fn create_sample(data: Vec<u8>) -> Sample {
-    Sample::new(KeyExpr::try_from("test/topic").unwrap(), data)
+    use zenoh::sample::SampleBuilder;
+    let key = KeyExpr::try_from("test/topic").unwrap();
+    SampleBuilder::put(key, data).into()
 }
 
 #[test]

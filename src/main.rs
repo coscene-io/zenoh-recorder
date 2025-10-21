@@ -18,7 +18,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
-use zenoh::prelude::r#async::*;
+use zenoh::config::Config;
+use zenoh::Wait;
 
 mod buffer;
 mod config;
@@ -82,50 +83,52 @@ async fn main() -> Result<()> {
     info!("Device ID: {}", recorder_config.recorder.device_id);
     info!("Storage backend: {}", recorder_config.storage.backend);
 
-    // Build Zenoh config
+    // Build Zenoh config using insert_json5 API (Zenoh 1.6)
     let mut zenoh_config = Config::default();
 
-    // Set mode
-    match recorder_config.zenoh.mode.as_str() {
-        "peer" => {
-            let _ = zenoh_config.set_mode(Some(WhatAmI::Peer));
-        }
-        "client" => {
-            let _ = zenoh_config.set_mode(Some(WhatAmI::Client));
-        }
-        "router" => {
-            let _ = zenoh_config.set_mode(Some(WhatAmI::Router));
-        }
-        _ => {
-            let _ = zenoh_config.set_mode(Some(WhatAmI::Peer));
-        }
-    }
+    // Set mode (peer, client, or router)
+    zenoh_config
+        .insert_json5("mode", &format!("\"{}\"", recorder_config.zenoh.mode))
+        .map_err(|e| anyhow::anyhow!("Failed to set Zenoh mode: {}", e))?;
 
-    // Set connect endpoints
+    info!("Zenoh mode: {}", recorder_config.zenoh.mode);
+
+    // Set connect endpoints (for connecting to routers/peers)
     if let Some(connect_config) = &recorder_config.zenoh.connect {
-        let endpoints: Vec<EndPoint> = connect_config
-            .endpoints
-            .iter()
-            .filter_map(|s| s.parse().ok())
-            .collect();
-        zenoh_config.connect.endpoints = endpoints;
+        if !connect_config.endpoints.is_empty() {
+            let endpoints_json = connect_config
+                .endpoints
+                .iter()
+                .map(|e| format!("\"{}\"", e))
+                .collect::<Vec<_>>()
+                .join(", ");
+            zenoh_config
+                .insert_json5("connect/endpoints", &format!("[{}]", endpoints_json))
+                .map_err(|e| anyhow::anyhow!("Failed to set connect endpoints: {}", e))?;
+            info!("Connect endpoints: {:?}", connect_config.endpoints);
+        }
     }
 
-    // Set listen endpoints
+    // Set listen endpoints (for accepting incoming connections)
     if let Some(listen_config) = &recorder_config.zenoh.listen {
-        let endpoints: Vec<EndPoint> = listen_config
-            .endpoints
-            .iter()
-            .filter_map(|s| s.parse().ok())
-            .collect();
-        zenoh_config.listen.endpoints = endpoints;
+        if !listen_config.endpoints.is_empty() {
+            let endpoints_json = listen_config
+                .endpoints
+                .iter()
+                .map(|e| format!("\"{}\"", e))
+                .collect::<Vec<_>>()
+                .join(", ");
+            zenoh_config
+                .insert_json5("listen/endpoints", &format!("[{}]", endpoints_json))
+                .map_err(|e| anyhow::anyhow!("Failed to set listen endpoints: {}", e))?;
+            info!("Listen endpoints: {:?}", listen_config.endpoints);
+        }
     }
 
     // Open Zenoh session
     let session = Arc::new(
         zenoh::open(zenoh_config)
-            .res()
-            .await
+            .wait()
             .map_err(|e| anyhow::anyhow!("Failed to open Zenoh session: {}", e))?,
     );
 

@@ -17,8 +17,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 use zenoh::key_expr::KeyExpr;
-use zenoh::prelude::r#async::*;
 use zenoh::sample::Sample;
+use zenoh::Config;
+use zenoh::Wait;
 use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::mcap_writer::McapSerializer;
 use zenoh_recorder::protocol::*;
@@ -26,15 +27,15 @@ use zenoh_recorder::recorder::RecorderManager;
 use zenoh_recorder::storage::BackendFactory;
 
 fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
+    use zenoh::sample::SampleBuilder;
     let key: KeyExpr<'static> = topic.try_into().unwrap();
-    Sample::new(key, data)
+    SampleBuilder::put(key, data).into()
 }
 
-async fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
+fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
     let config = Config::default();
     zenoh::open(config)
-        .res()
-        .await
+        .wait()
         .map(Arc::new)
         .map_err(|e| format!("{}", e))
 }
@@ -70,7 +71,7 @@ fn create_test_recorder_manager(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_empty_topics_list() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -97,7 +98,7 @@ async fn test_empty_topics_list() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_many_topics() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -191,7 +192,7 @@ fn test_all_compression_combinations() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_rapid_start_stop() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -291,7 +292,7 @@ fn test_request_with_maximal_fields() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_finish_immediately_after_start() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -323,7 +324,7 @@ async fn test_finish_immediately_after_start() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pause_without_recording() {
-    let session = create_test_session().await.unwrap();
+    let session = create_test_session().unwrap();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),

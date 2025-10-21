@@ -16,16 +16,17 @@
 ///
 use std::sync::Arc;
 use std::time::Duration;
-use zenoh::prelude::r#async::*;
+use zenoh::Config;
+use zenoh::Wait;
 use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
 use zenoh_recorder::protocol::*;
 use zenoh_recorder::recorder::RecorderManager;
 use zenoh_recorder::storage::BackendFactory;
 
-async fn create_session() -> Arc<zenoh::Session> {
+fn create_session() -> Arc<zenoh::Session> {
     let config = Config::default();
-    Arc::new(zenoh::open(config).res().await.unwrap())
+    Arc::new(zenoh::open(config).wait().unwrap())
 }
 
 fn create_test_recorder_manager(
@@ -60,7 +61,7 @@ fn create_test_recorder_manager(
 // Exhaustive control interface tests
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_with_start_command_full() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
@@ -80,14 +81,14 @@ async fn test_control_with_start_command_full() {
 
     // Create a status query that will be handled
     let status_query_key = "recorder/status/test-recording-999";
-    if let Ok(replies) = session.get(status_query_key).res().await {
+    if let Ok(replies) = session.get(status_query_key).wait() {
         if let Ok(Ok(reply)) =
             tokio::time::timeout(Duration::from_millis(500), replies.recv_async()).await
         {
-            if let Ok(sample) = reply.sample {
+            if let Ok(sample) = reply.into_result() {
                 // Should get a status response
                 let response: Result<StatusResponse, _> =
-                    serde_json::from_slice(&sample.payload.contiguous());
+                    serde_json::from_slice(&sample.payload().to_bytes());
                 if let Ok(status) = response {
                     assert!(!status.success); // Should fail for nonexistent ID
                 }
@@ -100,7 +101,7 @@ async fn test_control_with_start_command_full() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recorder_comprehensive_lifecycle() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -166,7 +167,7 @@ async fn test_recorder_comprehensive_lifecycle() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_manager_with_many_concurrent_operations() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -226,7 +227,7 @@ async fn test_manager_with_many_concurrent_operations() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_status_query_for_each_state() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -275,7 +276,7 @@ async fn test_status_query_for_each_state() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recording_with_maximum_metadata() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -317,7 +318,7 @@ async fn test_recording_with_maximum_metadata() {
 // Test all error paths
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_all_operations_on_nonexistent_recording() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -382,7 +383,7 @@ fn test_response_success_with_various_ids() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_rapid_state_transitions() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -420,7 +421,7 @@ async fn test_rapid_state_transitions() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_status_detailed_fields() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
@@ -470,7 +471,7 @@ async fn test_get_status_detailed_fields() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_parallel_queries() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
@@ -493,7 +494,7 @@ async fn test_control_interface_parallel_queries() {
         let session_clone = session.clone();
         let h = tokio::spawn(async move {
             let key = format!("recorder/status/parallel-test-{}", i);
-            session_clone.get(&key).res().await
+            session_clone.get(&key).wait()
         });
         query_handles.push(h);
     }
@@ -508,7 +509,7 @@ async fn test_control_interface_parallel_queries() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_finish_with_buffer_flush() {
-    let session = create_session().await;
+    let session = create_session();
     let manager = create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
@@ -535,9 +536,9 @@ async fn test_finish_with_buffer_flush() {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Publish some data
-        if let Ok(publisher) = session.declare_publisher("test/flush_finish").res().await {
+        if let Ok(publisher) = session.declare_publisher("test/flush_finish").wait() {
             for i in 0..10 {
-                let _ = publisher.put(format!("data_{}", i)).res().await;
+                let _ = publisher.put(format!("data_{}", i)).wait();
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }

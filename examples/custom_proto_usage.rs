@@ -4,7 +4,8 @@
 // and have the recorder store it as-is (schema-agnostic approach).
 
 use anyhow::Result;
-use zenoh::prelude::r#async::*;
+use zenoh::Config;
+use zenoh::Wait;
 
 // Example: User defines their own proto message
 // (In real usage, this would be generated from user's .proto files)
@@ -35,13 +36,11 @@ async fn main() -> Result<()> {
 
     // 3. Publish to Zenoh (recorder stores raw bytes)
     let session = zenoh::open(Config::default())
-        .res()
-        .await
+        .wait()
         .map_err(|e| anyhow::anyhow!("Failed to open Zenoh session: {}", e))?;
 
     session
         .put("/sensors/temperature", buffer)
-        .res()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to publish message: {}", e))?;
 

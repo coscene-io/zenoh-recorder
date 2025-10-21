@@ -14,7 +14,8 @@
 
 use anyhow::Result;
 use std::time::Duration;
-use zenoh::prelude::r#async::*;
+use zenoh::Config;
+use zenoh::Wait;
 
 /// Simple test client for publishing data that can be recorded
 #[tokio::main]
@@ -22,8 +23,7 @@ async fn main() -> Result<()> {
     println!("Starting test data publisher...");
 
     let session = zenoh::open(Config::default())
-        .res()
-        .await
+        .wait()
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     println!("Zenoh session opened");
@@ -33,13 +33,11 @@ async fn main() -> Result<()> {
     for i in 0..100 {
         session
             .put("/test/topic1", format!("test_data_topic1_{}", i))
-            .res()
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         session
             .put("/test/topic2", format!("test_data_topic2_{}", i))
-            .res()
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 

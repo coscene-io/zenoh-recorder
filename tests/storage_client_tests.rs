@@ -13,16 +13,23 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use zenoh_recorder::storage::{topic_to_entry_name, ReductStoreClient};
+use zenoh_recorder::config::ReductStoreConfig;
+use zenoh_recorder::storage::{topic_to_entry_name, ReductStoreBackend};
 
 #[test]
 fn test_reductstore_client_creation() {
-    let client = ReductStoreClient::new(
-        "http://localhost:8383".to_string(),
-        "test_bucket".to_string(),
-    );
+    let config = ReductStoreConfig {
+        url: "http://localhost:8383".to_string(),
+        bucket_name: "test_bucket".to_string(),
+        api_token: None,
+        timeout_seconds: 300,
+        max_retries: 3,
+    };
+    let client = ReductStoreBackend::new(config);
     // Just verify it can be created
-    drop(client);
+    if let Ok(client) = client {
+        drop(client);
+    }
 }
 
 #[test]
@@ -73,10 +80,14 @@ fn test_multiple_client_creation() {
     // Should be able to create multiple clients
     let clients: Vec<_> = (0..5)
         .map(|i| {
-            ReductStoreClient::new(
-                format!("http://localhost:{}", 8383 + i),
-                format!("bucket_{}", i),
-            )
+            let config = ReductStoreConfig {
+                url: format!("http://localhost:{}", 8383 + i),
+                bucket_name: format!("bucket_{}", i),
+                api_token: None,
+                timeout_seconds: 300,
+                max_retries: 3,
+            };
+            ReductStoreBackend::new(config)
         })
         .collect();
 

@@ -3,6 +3,7 @@
 // This example demonstrates how users can provide their own protobuf serialization
 // and have the recorder store it as-is (schema-agnostic approach).
 
+use anyhow::Result;
 use zenoh::prelude::r#async::*;
 
 // Example: User defines their own proto message
@@ -20,7 +21,7 @@ pub struct MyCustomMessage {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     // 1. User creates their own proto message
     let my_data = MyCustomMessage {
         sensor_id: "DHT22-001".to_string(),
@@ -30,13 +31,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // 2. User serializes it themselves (using prost)
-    let mut buffer = Vec::new();
-    prost::Message::encode(&my_data, &mut buffer)?;
+    let buffer = prost::Message::encode_to_vec(&my_data);
 
     // 3. Publish to Zenoh (recorder stores raw bytes)
-    let session = zenoh::open(config::default()).res().await?;
+    let session = zenoh::open(Config::default())
+        .res()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to open Zenoh session: {}", e))?;
 
-    session.put("/sensors/temperature", buffer).res().await?;
+    session
+        .put("/sensors/temperature", buffer)
+        .res()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to publish message: {}", e))?;
 
     println!("✅ Published custom proto message to Zenoh");
     println!("   Recorder will store it as-is (raw bytes)");

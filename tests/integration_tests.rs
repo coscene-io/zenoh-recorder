@@ -23,8 +23,39 @@
 use std::sync::Arc;
 use std::time::Duration;
 use zenoh::prelude::r#async::*;
+use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::protocol::*;
 use zenoh_recorder::recorder::RecorderManager;
+use zenoh_recorder::storage::BackendFactory;
+
+fn create_test_recorder_manager(
+    session: Arc<zenoh::Session>,
+    url: String,
+    bucket: String,
+) -> RecorderManager {
+    let storage_config = StorageConfig {
+        backend: "reductstore".to_string(),
+        backend_config: BackendConfig::ReductStore {
+            reductstore: ReductStoreConfig {
+                url,
+                bucket_name: bucket,
+                api_token: None,
+                timeout_seconds: 300,
+                max_retries: 3,
+            },
+        },
+    };
+
+    let config = RecorderConfig {
+        storage: storage_config,
+        ..Default::default()
+    };
+
+    let storage_backend =
+        BackendFactory::create(&config.storage).expect("Failed to create backend");
+
+    RecorderManager::new(session, storage_backend, config)
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recorder_manager_creation() {
@@ -36,7 +67,7 @@ async fn test_recorder_manager_creation() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -55,7 +86,7 @@ async fn test_start_recording() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -90,7 +121,7 @@ async fn test_pause_nonexistent_recording() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -111,7 +142,7 @@ async fn test_resume_nonexistent_recording() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -132,7 +163,7 @@ async fn test_cancel_nonexistent_recording() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -152,7 +183,7 @@ async fn test_finish_nonexistent_recording() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -172,7 +203,7 @@ async fn test_get_status_nonexistent() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -193,7 +224,7 @@ async fn test_manager_shutdown() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -213,7 +244,7 @@ async fn test_recording_lifecycle() {
         .map_err(|e| format!("{}", e))
         .unwrap();
 
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         Arc::new(session),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),

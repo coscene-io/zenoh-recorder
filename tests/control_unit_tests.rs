@@ -13,7 +13,6 @@
 // limitations under the License.
 
 // Unit tests for control.rs module - mock-based tests without requiring Zenoh infrastructure
-use serde_json;
 use zenoh_recorder::protocol::{
     CompressionLevel, CompressionType, RecorderCommand, RecorderRequest, RecorderResponse,
     RecordingStatus, StatusResponse,

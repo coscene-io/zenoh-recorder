@@ -48,6 +48,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install Protocol Buffers compiler (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+      
+      - name: Install Protocol Buffers compiler (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install protobuf
+          protoc --version
+      
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -76,7 +89,7 @@ jobs:
           tar czf ${{ matrix.artifact_name }}.tar.gz zenoh-recorder
       
       - name: Upload binary to release
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}.tar.gz

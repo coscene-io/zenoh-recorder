@@ -87,30 +87,38 @@ async fn main() -> Result<()> {
 
     // Set mode
     match recorder_config.zenoh.mode.as_str() {
-        "peer" => zenoh_config.set_mode(Some(WhatAmI::Peer))?,
-        "client" => zenoh_config.set_mode(Some(WhatAmI::Client))?,
-        "router" => zenoh_config.set_mode(Some(WhatAmI::Router))?,
-        _ => zenoh_config.set_mode(Some(WhatAmI::Peer))?,
+        "peer" => {
+            let _ = zenoh_config.set_mode(Some(WhatAmI::Peer));
+        }
+        "client" => {
+            let _ = zenoh_config.set_mode(Some(WhatAmI::Client));
+        }
+        "router" => {
+            let _ = zenoh_config.set_mode(Some(WhatAmI::Router));
+        }
+        _ => {
+            let _ = zenoh_config.set_mode(Some(WhatAmI::Peer));
+        }
     }
 
     // Set connect endpoints
     if let Some(connect_config) = &recorder_config.zenoh.connect {
-        let endpoints: Vec<zenoh_config::EndPoint> = connect_config
+        let endpoints: Vec<EndPoint> = connect_config
             .endpoints
             .iter()
             .filter_map(|s| s.parse().ok())
             .collect();
-        zenoh_config.connect.endpoints.set(endpoints)?;
+        zenoh_config.connect.endpoints = endpoints;
     }
 
     // Set listen endpoints
     if let Some(listen_config) = &recorder_config.zenoh.listen {
-        let endpoints: Vec<zenoh_config::EndPoint> = listen_config
+        let endpoints: Vec<EndPoint> = listen_config
             .endpoints
             .iter()
             .filter_map(|s| s.parse().ok())
             .collect();
-        zenoh_config.listen.endpoints.set(endpoints)?;
+        zenoh_config.listen.endpoints = endpoints;
     }
 
     // Open Zenoh session

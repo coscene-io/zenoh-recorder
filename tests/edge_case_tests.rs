@@ -19,10 +19,11 @@ use std::time::Duration;
 use zenoh::key_expr::KeyExpr;
 use zenoh::prelude::r#async::*;
 use zenoh::sample::Sample;
-use zenoh_recorder::buffer::TopicBuffer;
+use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::mcap_writer::McapSerializer;
 use zenoh_recorder::protocol::*;
 use zenoh_recorder::recorder::RecorderManager;
+use zenoh_recorder::storage::BackendFactory;
 
 fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
     let key: KeyExpr<'static> = topic.try_into().unwrap();
@@ -38,10 +39,39 @@ async fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
         .map_err(|e| format!("{}", e))
 }
 
+fn create_test_recorder_manager(
+    session: Arc<zenoh::Session>,
+    url: String,
+    bucket: String,
+) -> RecorderManager {
+    let storage_config = StorageConfig {
+        backend: "reductstore".to_string(),
+        backend_config: BackendConfig::ReductStore {
+            reductstore: ReductStoreConfig {
+                url,
+                bucket_name: bucket,
+                api_token: None,
+                timeout_seconds: 300,
+                max_retries: 3,
+            },
+        },
+    };
+
+    let config = RecorderConfig {
+        storage: storage_config,
+        ..Default::default()
+    };
+
+    let storage_backend =
+        BackendFactory::create(&config.storage).expect("Failed to create backend");
+
+    RecorderManager::new(session, storage_backend, config)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_empty_topics_list() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -61,15 +91,14 @@ async fn test_empty_topics_list() {
         compression_type: CompressionType::None,
     };
 
-    let response = manager.start_recording(request).await;
-    // Should handle gracefully
-    assert!(response.success || !response.success);
+    let _response = manager.start_recording(request).await;
+    // Should handle gracefully - may succeed or fail depending on environment
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_many_topics() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -163,7 +192,7 @@ fn test_all_compression_combinations() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_rapid_start_stop() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -263,7 +292,7 @@ fn test_request_with_maximal_fields() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_finish_immediately_after_start() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -287,15 +316,15 @@ async fn test_finish_immediately_after_start() {
 
     if let Some(rec_id) = &response.recording_id {
         // Finish immediately without pause
-        let finish_resp = manager.finish_recording(rec_id).await;
-        assert!(finish_resp.success || !finish_resp.success);
+        let _finish_resp = manager.finish_recording(rec_id).await;
+        // May succeed or fail depending on recording state
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pause_without_recording() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),

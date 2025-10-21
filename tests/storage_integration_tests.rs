@@ -18,7 +18,8 @@
 use std::collections::HashMap;
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
-use zenoh_recorder::storage::ReductStoreClient;
+use zenoh_recorder::config::ReductStoreConfig;
+use zenoh_recorder::storage::{ReductStoreBackend, StorageBackend};
 
 // Helper to get ReductStore URL from environment or use default
 fn get_reductstore_url() -> String {
@@ -55,6 +56,18 @@ fn test_entry_name(test_name: &str) -> String {
     format!("test_{}", test_name)
 }
 
+// Helper to create ReductStoreBackend with config
+fn create_test_client() -> Result<ReductStoreBackend, anyhow::Error> {
+    let config = ReductStoreConfig {
+        url: get_reductstore_url(),
+        bucket_name: get_test_bucket(),
+        api_token: None,
+        timeout_seconds: 300,
+        max_retries: 3,
+    };
+    ReductStoreBackend::new(config)
+}
+
 #[tokio::test]
 async fn test_storage_ensure_bucket() {
     if !is_reductstore_available().await {
@@ -65,13 +78,13 @@ async fn test_storage_ensure_bucket() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
+    let client = create_test_client().expect("Failed to create client");
 
     // Should succeed creating or verifying bucket
-    let result = client.ensure_bucket().await;
+    let result = client.initialize().await;
     assert!(
         result.is_ok(),
-        "Failed to ensure bucket: {:?}",
+        "Failed to initialize bucket: {:?}",
         result.err()
     );
 }
@@ -83,11 +96,8 @@ async fn test_storage_write_record() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("write_record");
     let timestamp_us = current_timestamp_us();
@@ -109,11 +119,8 @@ async fn test_storage_write_large_payload() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("write_large");
     let timestamp_us = current_timestamp_us();
@@ -138,11 +145,8 @@ async fn test_storage_write_with_multiple_labels() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("write_labels");
     let timestamp_us = current_timestamp_us();
@@ -171,11 +175,8 @@ async fn test_storage_write_multiple_records() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("write_multiple");
     let labels = HashMap::new();
@@ -205,11 +206,8 @@ async fn test_storage_write_binary_data() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("write_binary");
     let timestamp_us = current_timestamp_us();
@@ -235,11 +233,8 @@ async fn test_storage_write_empty_data() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("write_empty");
     let timestamp_us = current_timestamp_us();
@@ -264,11 +259,8 @@ async fn test_storage_write_record_with_retry_success() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("write_retry");
     let timestamp_us = current_timestamp_us();
@@ -276,7 +268,7 @@ async fn test_storage_write_record_with_retry_success() {
     let labels = HashMap::new();
 
     let result = client
-        .write_record_with_retry(&entry_name, timestamp_us, data, labels, 3)
+        .write_with_retry(&entry_name, timestamp_us, data, labels, 3)
         .await;
 
     assert!(
@@ -293,11 +285,8 @@ async fn test_storage_write_to_different_entries() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entries = vec!["test_entry_1", "test_entry_2", "test_entry_3"];
 
@@ -326,11 +315,8 @@ async fn test_storage_write_with_special_characters_in_labels() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("write_special_labels");
     let timestamp_us = current_timestamp_us();
@@ -359,11 +345,8 @@ async fn test_storage_concurrent_writes() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = test_entry_name("concurrent_writes");
     let labels = HashMap::new();
@@ -371,7 +354,7 @@ async fn test_storage_concurrent_writes() {
     // Spawn 10 concurrent writes
     let mut handles = vec![];
     for i in 0..10 {
-        let client_clone = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
+        let client_clone = create_test_client().expect("Failed to create client");
         let entry_name_clone = entry_name.clone();
         let labels_clone = labels.clone();
 
@@ -406,11 +389,8 @@ async fn test_storage_write_with_various_timestamps() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let data = b"test data".to_vec();
     let labels = HashMap::new();
@@ -453,12 +433,27 @@ async fn test_storage_multiple_buckets() {
     let bucket1 = format!("{}-1", get_test_bucket());
     let bucket2 = format!("{}-2", get_test_bucket());
 
-    let client1 = ReductStoreClient::new(get_reductstore_url(), bucket1);
-    let client2 = ReductStoreClient::new(get_reductstore_url(), bucket2);
+    let config1 = ReductStoreConfig {
+        url: get_reductstore_url(),
+        bucket_name: bucket1,
+        api_token: None,
+        timeout_seconds: 300,
+        max_retries: 3,
+    };
+    let config2 = ReductStoreConfig {
+        url: get_reductstore_url(),
+        bucket_name: bucket2,
+        api_token: None,
+        timeout_seconds: 300,
+        max_retries: 3,
+    };
+
+    let client1 = ReductStoreBackend::new(config1).expect("Failed to create client1");
+    let client2 = ReductStoreBackend::new(config2).expect("Failed to create client2");
 
     // Ensure both buckets exist
-    assert!(client1.ensure_bucket().await.is_ok());
-    assert!(client2.ensure_bucket().await.is_ok());
+    assert!(client1.initialize().await.is_ok());
+    assert!(client2.initialize().await.is_ok());
 
     // Write to both buckets
     let entry_name = "test_entry";
@@ -483,11 +478,8 @@ async fn test_storage_write_with_long_entry_name() {
         return;
     }
 
-    let client = ReductStoreClient::new(get_reductstore_url(), get_test_bucket());
-    client
-        .ensure_bucket()
-        .await
-        .expect("Failed to ensure bucket");
+    let client = create_test_client().expect("Failed to create client");
+    client.initialize().await.expect("Failed to ensure bucket");
 
     let entry_name = format!("test_entry_with_very_long_name_{}", "x".repeat(100));
     let timestamp_us = current_timestamp_us();

@@ -80,7 +80,7 @@ async fn test_topic_buffer_size_trigger() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Should have triggered at least one flush
-    assert!(flush_queue.len() > 0 || buffer.stats().1 < 100);
+    assert!(!flush_queue.is_empty() || buffer.stats().1 < 100);
 }
 
 #[tokio::test]

@@ -318,7 +318,7 @@ fn test_mcap_with_very_long_recording_id() {
 fn test_mcap_with_very_long_topic() {
     let serializer = McapSerializer::new(CompressionType::None, CompressionLevel::Default);
 
-    let long_topic = format!("{}", "topic/".repeat(100));
+    let long_topic = "topic/".repeat(100);
     let samples = vec![create_sample(vec![1, 2, 3])];
     let result = serializer.serialize_batch(&long_topic, samples, "rec");
     assert!(result.is_ok(), "Should handle very long topic");

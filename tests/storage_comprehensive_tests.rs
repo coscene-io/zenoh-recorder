@@ -18,7 +18,8 @@
 ///
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use zenoh_recorder::storage::{topic_to_entry_name, ReductStoreClient};
+use zenoh_recorder::config::ReductStoreConfig;
+use zenoh_recorder::storage::{topic_to_entry_name, ReductStoreBackend};
 
 #[test]
 fn test_client_creation_various_urls() {
@@ -31,8 +32,17 @@ fn test_client_creation_various_urls() {
     ];
 
     for url in urls {
-        let client = ReductStoreClient::new(url.to_string(), "bucket".to_string());
-        drop(client);
+        let config = ReductStoreConfig {
+            url: url.to_string(),
+            bucket_name: "bucket".to_string(),
+            api_token: None,
+            timeout_seconds: 300,
+            max_retries: 3,
+        };
+        let client = ReductStoreBackend::new(config);
+        if let Ok(client) = client {
+            drop(client);
+        }
     }
 }
 
@@ -47,9 +57,17 @@ fn test_client_creation_various_buckets() {
     ];
 
     for bucket in buckets {
-        let client =
-            ReductStoreClient::new("http://localhost:8383".to_string(), bucket.to_string());
-        drop(client);
+        let config = ReductStoreConfig {
+            url: "http://localhost:8383".to_string(),
+            bucket_name: bucket.to_string(),
+            api_token: None,
+            timeout_seconds: 300,
+            max_retries: 3,
+        };
+        let client = ReductStoreBackend::new(config);
+        if let Ok(client) = client {
+            drop(client);
+        }
     }
 }
 
@@ -189,7 +207,14 @@ fn test_reductstore_url_handling() {
     ];
 
     for (url, bucket) in urls {
-        let _client = ReductStoreClient::new(url.to_string(), bucket.to_string());
+        let config = ReductStoreConfig {
+            url: url.to_string(),
+            bucket_name: bucket.to_string(),
+            api_token: None,
+            timeout_seconds: 300,
+            max_retries: 3,
+        };
+        let _client = ReductStoreBackend::new(config);
         // Just verify creation doesn't panic
     }
 }
@@ -234,7 +259,7 @@ fn test_very_long_topic_names() {
     let long_topic = format!("/{}", "segment/".repeat(20));
     let entry = topic_to_entry_name(&long_topic);
 
-    assert!(entry.len() > 0);
+    assert!(!entry.is_empty());
     assert!(entry.contains("segment"));
 }
 

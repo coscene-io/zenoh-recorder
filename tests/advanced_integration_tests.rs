@@ -16,28 +16,52 @@
 ///
 use std::sync::Arc;
 use std::time::Duration;
-use zenoh::key_expr::KeyExpr;
 use zenoh::prelude::r#async::*;
-use zenoh::sample::Sample;
+use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
 use zenoh_recorder::protocol::*;
 use zenoh_recorder::recorder::RecorderManager;
-
-fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
-    let key: KeyExpr<'static> = topic.try_into().unwrap();
-    Sample::new(key, data)
-}
+use zenoh_recorder::storage::BackendFactory;
 
 async fn create_session() -> Arc<zenoh::Session> {
     let config = Config::default();
     Arc::new(zenoh::open(config).res().await.unwrap())
 }
 
+fn create_test_recorder_manager(
+    session: Arc<zenoh::Session>,
+    url: String,
+    bucket: String,
+) -> RecorderManager {
+    let storage_config = StorageConfig {
+        backend: "reductstore".to_string(),
+        backend_config: BackendConfig::ReductStore {
+            reductstore: ReductStoreConfig {
+                url,
+                bucket_name: bucket,
+                api_token: None,
+                timeout_seconds: 300,
+                max_retries: 3,
+            },
+        },
+    };
+
+    let config = RecorderConfig {
+        storage: storage_config,
+        ..Default::default()
+    };
+
+    let storage_backend =
+        BackendFactory::create(&config.storage).expect("Failed to create backend");
+
+    RecorderManager::new(session, storage_backend, config)
+}
+
 // Exhaustive control interface tests
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_with_start_command_full() {
     let session = create_session().await;
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
         "control_test_bucket".to_string(),
@@ -57,20 +81,15 @@ async fn test_control_with_start_command_full() {
     // Create a status query that will be handled
     let status_query_key = "recorder/status/test-recording-999";
     if let Ok(replies) = session.get(status_query_key).res().await {
-        if let Ok(reply) =
+        if let Ok(Ok(reply)) =
             tokio::time::timeout(Duration::from_millis(500), replies.recv_async()).await
         {
-            if let Ok(reply) = reply {
-                match reply.sample {
-                    Ok(sample) => {
-                        // Should get a status response
-                        let response: Result<StatusResponse, _> =
-                            serde_json::from_slice(&sample.payload.contiguous());
-                        if let Ok(status) = response {
-                            assert!(!status.success); // Should fail for nonexistent ID
-                        }
-                    }
-                    Err(_) => {}
+            if let Ok(sample) = reply.sample {
+                // Should get a status response
+                let response: Result<StatusResponse, _> =
+                    serde_json::from_slice(&sample.payload.contiguous());
+                if let Ok(status) = response {
+                    assert!(!status.success); // Should fail for nonexistent ID
                 }
             }
         }
@@ -82,7 +101,7 @@ async fn test_control_with_start_command_full() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recorder_comprehensive_lifecycle() {
     let session = create_session().await;
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "lifecycle_bucket".to_string(),
@@ -140,15 +159,15 @@ async fn test_recorder_comprehensive_lifecycle() {
         }
 
         // Finish
-        let finish_resp = manager.finish_recording(rec_id).await;
-        assert!(finish_resp.success || !finish_resp.success);
+        let _finish_resp = manager.finish_recording(rec_id).await;
+        // May succeed or fail depending on recording state
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_manager_with_many_concurrent_operations() {
     let session = create_session().await;
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "concurrent_ops_bucket".to_string(),
@@ -208,7 +227,7 @@ async fn test_manager_with_many_concurrent_operations() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_status_query_for_each_state() {
     let session = create_session().await;
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "state_query_bucket".to_string(),
@@ -232,32 +251,32 @@ async fn test_status_query_for_each_state() {
 
     if let Some(rec_id) = &response.recording_id {
         // Check status in Recording state
-        let status1 = manager.get_status(rec_id).await;
-        assert!(status1.success || !status1.success);
+        let _status1 = manager.get_status(rec_id).await;
+        // Status may succeed or fail
 
         // Pause and check status
         let pause_resp = manager.pause_recording(rec_id).await;
         if pause_resp.success {
-            let status2 = manager.get_status(rec_id).await;
-            assert!(status2.success || !status2.success);
+            let _status2 = manager.get_status(rec_id).await;
+            // Status may succeed or fail
 
             // Resume and check status
             manager.resume_recording(rec_id).await;
-            let status3 = manager.get_status(rec_id).await;
-            assert!(status3.success || !status3.success);
+            let _status3 = manager.get_status(rec_id).await;
+            // Status may succeed or fail
         }
 
         // Finish and check status one more time
         manager.finish_recording(rec_id).await;
-        let status4 = manager.get_status(rec_id).await;
-        assert!(status4.success || !status4.success);
+        let _status4 = manager.get_status(rec_id).await;
+        // Status may succeed or fail
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recording_with_maximum_metadata() {
     let session = create_session().await;
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "max_metadata_bucket".to_string(),
@@ -299,7 +318,7 @@ async fn test_recording_with_maximum_metadata() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_all_operations_on_nonexistent_recording() {
     let session = create_session().await;
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "error_test_bucket".to_string(),
@@ -364,7 +383,7 @@ fn test_response_success_with_various_ids() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_rapid_state_transitions() {
     let session = create_session().await;
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "rapid_state_bucket".to_string(),
@@ -402,7 +421,7 @@ async fn test_rapid_state_transitions() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_status_detailed_fields() {
     let session = create_session().await;
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "detailed_status_bucket".to_string(),
@@ -452,7 +471,7 @@ async fn test_get_status_detailed_fields() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_parallel_queries() {
     let session = create_session().await;
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
         "parallel_query_bucket".to_string(),
@@ -490,7 +509,7 @@ async fn test_control_interface_parallel_queries() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_finish_with_buffer_flush() {
     let session = create_session().await;
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
         "flush_on_finish_bucket".to_string(),
@@ -526,12 +545,10 @@ async fn test_finish_with_buffer_flush() {
         tokio::time::sleep(Duration::from_millis(200)).await;
 
         // Finish should flush all buffers
-        let finish_resp = manager.finish_recording(rec_id).await;
+        let _finish_resp = manager.finish_recording(rec_id).await;
 
         // Wait for flush to complete
         tokio::time::sleep(Duration::from_secs(3)).await;
-
-        assert!(finish_resp.success || !finish_resp.success);
     }
 }
 

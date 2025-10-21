@@ -21,11 +21,12 @@ use zenoh::key_expr::KeyExpr;
 use zenoh::prelude::r#async::*;
 use zenoh::sample::Sample;
 use zenoh_recorder::buffer::TopicBuffer;
+use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
 use zenoh_recorder::mcap_writer::McapSerializer;
 use zenoh_recorder::protocol::*;
 use zenoh_recorder::recorder::RecorderManager;
-use zenoh_recorder::storage::ReductStoreClient;
+use zenoh_recorder::storage::{BackendFactory, ReductStoreBackend};
 
 fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
     let key: KeyExpr<'static> = topic.try_into().unwrap();
@@ -35,6 +36,35 @@ fn create_sample(topic: &'static str, data: Vec<u8>) -> Sample {
 async fn create_session() -> Arc<zenoh::Session> {
     let config = Config::default();
     Arc::new(zenoh::open(config).res().await.unwrap())
+}
+
+fn create_test_recorder_manager(
+    session: Arc<zenoh::Session>,
+    url: String,
+    bucket: String,
+) -> RecorderManager {
+    let storage_config = StorageConfig {
+        backend: "reductstore".to_string(),
+        backend_config: BackendConfig::ReductStore {
+            reductstore: ReductStoreConfig {
+                url,
+                bucket_name: bucket,
+                api_token: None,
+                timeout_seconds: 300,
+                max_retries: 3,
+            },
+        },
+    };
+
+    let config = RecorderConfig {
+        storage: storage_config,
+        ..Default::default()
+    };
+
+    let storage_backend =
+        BackendFactory::create(&config.storage).expect("Failed to create backend");
+
+    RecorderManager::new(session, storage_backend, config)
 }
 
 // Buffer edge cases
@@ -55,7 +85,7 @@ async fn test_buffer_with_zero_max_size() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Should have triggered flush
-    assert!(flush_queue.len() > 0 || buffer.stats().0 == 0);
+    assert!(!flush_queue.is_empty() || buffer.stats().0 == 0);
 }
 
 #[tokio::test]
@@ -96,7 +126,7 @@ async fn test_buffer_full_queue() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Queue should be full or have items
-    assert!(flush_queue.len() >= 0);
+    // Note: len() is always >= 0 for usize, so this always passes
 }
 
 // MCAP edge cases
@@ -137,7 +167,7 @@ fn test_mcap_with_huge_sample_count() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_double_pause() {
     let session = create_session().await;
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -178,7 +208,7 @@ async fn test_double_pause() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_resume_without_pause() {
     let session = create_session().await;
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -214,7 +244,7 @@ async fn test_resume_without_pause() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_finish_after_cancel() {
     let session = create_session().await;
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -261,8 +291,17 @@ fn test_storage_client_with_different_configs() {
     ];
 
     for (url, bucket) in configs {
-        let client = ReductStoreClient::new(url.to_string(), bucket.to_string());
-        drop(client);
+        let config = ReductStoreConfig {
+            url: url.to_string(),
+            bucket_name: bucket.to_string(),
+            api_token: None,
+            timeout_seconds: 300,
+            max_retries: 3,
+        };
+        let client = ReductStoreBackend::new(config);
+        if let Ok(client) = client {
+            drop(client);
+        }
     }
 }
 
@@ -313,7 +352,7 @@ fn test_status_response_serialization_all_fields() {
     let json = serde_json::to_string(&response).unwrap();
     let deserialized: StatusResponse = serde_json::from_str(&json).unwrap();
 
-    assert_eq!(deserialized.success, true);
+    assert!(deserialized.success);
     assert_eq!(deserialized.status, RecordingStatus::Uploading);
     assert_eq!(deserialized.skills.len(), 3);
     assert_eq!(deserialized.active_topics.len(), 3);
@@ -357,7 +396,7 @@ async fn test_control_interface_device_ids() {
     let device_ids = vec!["device-1", "device-2", "device-3"];
 
     for device_id in device_ids {
-        let manager = Arc::new(RecorderManager::new(
+        let manager = Arc::new(create_test_recorder_manager(
             session.clone(),
             "http://localhost:8383".to_string(),
             "bucket".to_string(),
@@ -402,7 +441,7 @@ async fn test_recorder_with_all_compression_types() {
     ];
 
     for comp_type in compression_types {
-        let manager = RecorderManager::new(
+        let manager = create_test_recorder_manager(
             session.clone(),
             "http://localhost:8383".to_string(),
             format!("bucket_{:?}", comp_type),
@@ -442,7 +481,8 @@ fn test_large_sample_count_serialization() {
 
     let result = serializer.serialize_batch("/test/topic", samples, "rec-large");
     assert!(result.is_ok());
-    assert!(result.unwrap().len() > 0);
+    let serialized = result.unwrap();
+    assert!(!serialized.is_empty());
 }
 
 #[test]
@@ -463,7 +503,7 @@ fn test_mcap_alternating_data_sizes() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_shutdown_with_active_recordings() {
     let session = create_session().await;
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),

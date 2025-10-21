@@ -20,9 +20,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 use zenoh::prelude::r#async::*;
+use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
 use zenoh_recorder::protocol::*;
 use zenoh_recorder::recorder::RecorderManager;
+use zenoh_recorder::storage::BackendFactory;
 
 /// Helper to create a test session
 async fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
@@ -34,10 +36,39 @@ async fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
         .map_err(|e| format!("{}", e))
 }
 
+fn create_test_recorder_manager(
+    session: Arc<zenoh::Session>,
+    url: String,
+    bucket: String,
+) -> RecorderManager {
+    let storage_config = StorageConfig {
+        backend: "reductstore".to_string(),
+        backend_config: BackendConfig::ReductStore {
+            reductstore: ReductStoreConfig {
+                url,
+                bucket_name: bucket,
+                api_token: None,
+                timeout_seconds: 300,
+                max_retries: 3,
+            },
+        },
+    };
+
+    let config = RecorderConfig {
+        storage: storage_config,
+        ..Default::default()
+    };
+
+    let storage_backend =
+        BackendFactory::create(&config.storage).expect("Failed to create backend");
+
+    RecorderManager::new(session, storage_backend, config)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_creation() {
     let session = create_test_session().await.unwrap();
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -52,7 +83,7 @@ async fn test_control_interface_creation() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_run_timeout() {
     let session = create_test_session().await.unwrap();
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -70,7 +101,7 @@ async fn test_control_interface_run_timeout() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_control_interface_with_query() {
     let session = create_test_session().await.unwrap();
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session.clone(),
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -128,7 +159,7 @@ async fn test_multiple_control_interfaces() {
     let mut interfaces = Vec::new();
 
     for device in devices {
-        let manager = Arc::new(RecorderManager::new(
+        let manager = Arc::new(create_test_recorder_manager(
             session.clone(),
             "http://localhost:8383".to_string(),
             format!("bucket_{}", device),

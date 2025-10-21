@@ -39,7 +39,7 @@ pub use protocol::{
     RecordingMetadata, RecordingStatus, StatusResponse,
 };
 pub use recorder::{RecorderManager, RecordingSession};
-pub use storage::{topic_to_entry_name, ReductStoreClient};
+pub use storage::topic_to_entry_name;
 
 // Include protobuf definitions
 pub mod proto {

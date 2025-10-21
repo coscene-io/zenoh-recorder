@@ -20,12 +20,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 use zenoh::prelude::r#async::*;
+use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::control::ControlInterface;
 use zenoh_recorder::protocol::{
     CompressionLevel, CompressionType, RecorderCommand, RecorderRequest, RecordingStatus,
     StatusResponse,
 };
 use zenoh_recorder::recorder::RecorderManager;
+use zenoh_recorder::storage::BackendFactory;
 
 // Helper to get Zenoh endpoint
 fn get_zenoh_endpoint() -> String {
@@ -60,6 +62,35 @@ async fn are_services_available() -> bool {
     reductstore_ok && zenoh_ok
 }
 
+fn create_test_recorder_manager(
+    session: Arc<zenoh::Session>,
+    url: String,
+    bucket: String,
+) -> RecorderManager {
+    let storage_config = StorageConfig {
+        backend: "reductstore".to_string(),
+        backend_config: BackendConfig::ReductStore {
+            reductstore: ReductStoreConfig {
+                url,
+                bucket_name: bucket,
+                api_token: None,
+                timeout_seconds: 300,
+                max_retries: 3,
+            },
+        },
+    };
+
+    let config = RecorderConfig {
+        storage: storage_config,
+        ..Default::default()
+    };
+
+    let storage_backend =
+        BackendFactory::create(&config.storage).expect("Failed to create backend");
+
+    RecorderManager::new(session, storage_backend, config)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_e2e_control_interface_query() {
     if !are_services_available().await {
@@ -76,7 +107,7 @@ async fn test_e2e_control_interface_query() {
     let session_arc = Arc::new(session);
 
     // Create recorder manager
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session_arc.clone(),
         get_reductstore_url(),
         get_test_bucket(),
@@ -136,7 +167,8 @@ async fn test_e2e_recorder_manager_with_reductstore() {
     let session_arc = Arc::new(session);
 
     // Create recorder manager
-    let manager = RecorderManager::new(session_arc, get_reductstore_url(), get_test_bucket());
+    let manager =
+        create_test_recorder_manager(session_arc, get_reductstore_url(), get_test_bucket());
 
     // Create a start recording request (recording_id is None - server generates it)
     let request = RecorderRequest {
@@ -201,7 +233,8 @@ async fn test_e2e_multiple_recordings() {
     let session = zenoh::open(config::peer()).res().await.unwrap();
     let session_arc = Arc::new(session);
 
-    let manager = RecorderManager::new(session_arc, get_reductstore_url(), get_test_bucket());
+    let manager =
+        create_test_recorder_manager(session_arc, get_reductstore_url(), get_test_bucket());
 
     // Start multiple recordings and collect their IDs
     let mut recording_ids = Vec::new();
@@ -249,7 +282,8 @@ async fn test_e2e_recording_with_compression_types() {
     let session = zenoh::open(config::peer()).res().await.unwrap();
     let session_arc = Arc::new(session);
 
-    let manager = RecorderManager::new(session_arc, get_reductstore_url(), get_test_bucket());
+    let manager =
+        create_test_recorder_manager(session_arc, get_reductstore_url(), get_test_bucket());
 
     let compression_types = vec![
         CompressionType::None,
@@ -297,7 +331,8 @@ async fn test_e2e_cancel_recording() {
     let session = zenoh::open(config::peer()).res().await.unwrap();
     let session_arc = Arc::new(session);
 
-    let manager = RecorderManager::new(session_arc, get_reductstore_url(), get_test_bucket());
+    let manager =
+        create_test_recorder_manager(session_arc, get_reductstore_url(), get_test_bucket());
 
     let request = RecorderRequest {
         command: RecorderCommand::Start,
@@ -337,7 +372,8 @@ async fn test_e2e_error_handling() {
     let session = zenoh::open(config::peer()).res().await.unwrap();
     let session_arc = Arc::new(session);
 
-    let manager = RecorderManager::new(session_arc, get_reductstore_url(), get_test_bucket());
+    let manager =
+        create_test_recorder_manager(session_arc, get_reductstore_url(), get_test_bucket());
 
     // Try to pause non-existent recording
     let response = manager.pause_recording("nonexistent").await;
@@ -367,7 +403,8 @@ async fn test_e2e_recording_lifecycle_with_metadata() {
     let session = zenoh::open(config::peer()).res().await.unwrap();
     let session_arc = Arc::new(session);
 
-    let manager = RecorderManager::new(session_arc, get_reductstore_url(), get_test_bucket());
+    let manager =
+        create_test_recorder_manager(session_arc, get_reductstore_url(), get_test_bucket());
 
     let request = RecorderRequest {
         command: RecorderCommand::Start,

@@ -17,8 +17,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 use zenoh::prelude::r#async::*;
+use zenoh_recorder::config::{BackendConfig, RecorderConfig, ReductStoreConfig, StorageConfig};
 use zenoh_recorder::protocol::*;
 use zenoh_recorder::recorder::RecorderManager;
+use zenoh_recorder::storage::BackendFactory;
 
 async fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
     let config = Config::default();
@@ -29,10 +31,39 @@ async fn create_test_session() -> Result<Arc<zenoh::Session>, String> {
         .map_err(|e| format!("{}", e))
 }
 
+fn create_test_recorder_manager(
+    session: Arc<zenoh::Session>,
+    url: String,
+    bucket: String,
+) -> RecorderManager {
+    let storage_config = StorageConfig {
+        backend: "reductstore".to_string(),
+        backend_config: BackendConfig::ReductStore {
+            reductstore: ReductStoreConfig {
+                url,
+                bucket_name: bucket,
+                api_token: None,
+                timeout_seconds: 300,
+                max_retries: 3,
+            },
+        },
+    };
+
+    let config = RecorderConfig {
+        storage: storage_config,
+        ..Default::default()
+    };
+
+    let storage_backend =
+        BackendFactory::create(&config.storage).expect("Failed to create backend");
+
+    RecorderManager::new(session, storage_backend, config)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multiple_recordings() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -63,7 +94,7 @@ async fn test_multiple_recordings() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recording_state_transitions() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -121,7 +152,7 @@ async fn test_recording_state_transitions() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_cancel_recording() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -147,8 +178,8 @@ async fn test_cancel_recording() {
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         // Cancel should succeed
-        let cancel_resp = manager.cancel_recording(rec_id).await;
-        assert!(cancel_resp.success || !cancel_resp.success); // May fail if ReductStore unavailable
+        let _cancel_resp = manager.cancel_recording(rec_id).await;
+        // Note: Cancel may succeed or fail depending on ReductStore availability
 
         // After cancel, status should show not found or cancelled
         let status = manager.get_status(rec_id).await;
@@ -159,7 +190,7 @@ async fn test_cancel_recording() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recording_with_all_metadata() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -199,7 +230,7 @@ async fn test_recording_with_all_metadata() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pause_resume_cycle() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -241,7 +272,7 @@ async fn test_pause_resume_cycle() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_invalid_state_transitions() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -263,7 +294,7 @@ async fn test_invalid_state_transitions() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_concurrent_recordings() {
     let session = create_test_session().await.unwrap();
-    let manager = Arc::new(RecorderManager::new(
+    let manager = Arc::new(create_test_recorder_manager(
         session,
         "http://localhost:8383".to_string(),
         "test_bucket".to_string(),
@@ -341,7 +372,7 @@ async fn test_recording_metadata_fields() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_manager_handles_errors_gracefully() {
     let session = create_test_session().await.unwrap();
-    let manager = RecorderManager::new(
+    let manager = create_test_recorder_manager(
         session,
         "http://invalid-url-that-does-not-exist:99999".to_string(),
         "bucket".to_string(),
@@ -363,8 +394,7 @@ async fn test_manager_handles_errors_gracefully() {
 
     let response = manager.start_recording(request).await;
 
-    // Should handle error gracefully (either succeed or return error response)
-    assert!(response.success || !response.success);
+    // Should handle error gracefully - response indicates whether operation succeeded
     if !response.success {
         assert!(!response.message.is_empty());
     }
@@ -401,7 +431,7 @@ fn test_all_compression_levels() {
         let zstd = level.to_zstd_level();
         let lz4 = level.to_lz4_level();
 
-        assert!(zstd >= 1 && zstd <= 19);
-        assert!(lz4 >= 1 && lz4 <= 12);
+        assert!((1..=19).contains(&zstd));
+        assert!((1..=12).contains(&lz4));
     }
 }

@@ -76,6 +76,12 @@ impl McapSerializer {
     /// - LZ4: Fast compression, moderate ratio (~2-3x)
     /// - Zstd: Slower but better compression (~4-6x)
     /// - None: No compression overhead, largest size
+    ///
+    /// # Note
+    /// This is primarily for testing. Production code should use `with_schema_config`
+    /// to explicitly configure schema metadata handling.
+    #[doc(hidden)]
+    #[allow(dead_code)]
     pub fn new(compression_type: CompressionType, compression_level: CompressionLevel) -> Self {
         Self {
             compression_type,

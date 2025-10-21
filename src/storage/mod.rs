@@ -28,8 +28,5 @@ pub mod reductstore;
 
 pub use backend::StorageBackend;
 pub use factory::BackendFactory;
-pub use filesystem::FilesystemBackend;
+#[allow(unused_imports)]
 pub use reductstore::{topic_to_entry_name, ReductStoreBackend};
-
-// Re-export for backward compatibility
-pub use reductstore::ReductStoreBackend as ReductStoreClient;

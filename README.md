@@ -54,19 +54,26 @@ This release introduces a complete configuration and multi-backend storage syste
 ## 🚀 Quick Start
 
 ```bash
-# 1. Clone and build
-git clone <repository>
+# 1. Clone the repository
+git clone https://github.com/coscene-io/zenoh-recorder.git
 cd zenoh-recorder
+
+# 2. Install protoc (required for building)
+# Debian/Ubuntu
+sudo apt-get update && sudo apt-get install -y protobuf-compiler
+# macOS: brew install protobuf
+
+# 3. Build
 cargo build --release
 
-# 2. Start infrastructure (Docker)
+# 4. Start infrastructure (Docker)
 docker run -d -p 7447:7447 eclipse/zenoh:latest
 docker run -d -p 8383:8383 reduct/store:latest
 
-# 3. Run recorder with default config
+# 5. Run recorder with default config
 ./target/release/zenoh-recorder --config config/default.yaml
 
-# 4. Start a recording (in another terminal)
+# 6. Start a recording (in another terminal)
 echo '{
   "command": "start",
   "device_id": "robot-001",
@@ -75,7 +82,7 @@ echo '{
   "compression_level": 2
 }' | z_put 'recorder/control/recorder-001'
 
-# 5. Query data in ReductStore Web UI
+# 7. Query data in ReductStore Web UI
 open http://localhost:8383
 ```
 
@@ -156,7 +163,13 @@ For a complete deployment example, see `examples/docker-compose.yml`.
 
 ### Required
 1. **Rust**: 1.75 or later
-2. **Zenoh**: Zenoh router or peer network
+2. **Protocol Buffers Compiler (protoc)**: Required for building
+   - **Debian/Ubuntu**: `sudo apt-get install protobuf-compiler`
+   - **macOS**: `brew install protobuf`
+   - **Arch Linux**: `sudo pacman -S protobuf`
+   - **Windows**: Download from [protobuf releases](https://github.com/protocolbuffers/protobuf/releases)
+   - Alternatively, set `PROTOC` env variable to the path of `protoc` binary
+3. **Zenoh**: Zenoh router or peer network
 
 ### Storage Backend (Choose One or More)
 - **ReductStore** (recommended for time-series data)
@@ -182,6 +195,27 @@ This starts:
 - Zenoh Recorder agent
 
 ## Building
+
+### Prerequisites Check
+
+Before building, ensure you have `protoc` installed:
+
+```bash
+# Check if protoc is installed
+protoc --version
+
+# If not installed:
+# Debian/Ubuntu
+sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+# macOS
+brew install protobuf
+
+# Arch Linux
+sudo pacman -S protobuf
+```
+
+### Build Commands
 
 ```bash
 cd zenoh-recorder
@@ -731,6 +765,30 @@ curl http://localhost:8383/api/v1/b/ros_data/camera_front
 ```
 
 ## Troubleshooting
+
+### Build Issues
+
+**`protoc` not found error**
+```
+Error: Custom { kind: NotFound, error: "Could not find `protoc`..." }
+```
+
+**Solution:**
+```bash
+# Install protoc
+# Debian/Ubuntu
+sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+# macOS
+brew install protobuf
+
+# Verify installation
+protoc --version
+
+# Alternative: Set PROTOC environment variable
+export PROTOC=/path/to/protoc
+cargo build --release
+```
 
 ### Configuration Issues
 

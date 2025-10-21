@@ -18,6 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install Protocol Buffers compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+      
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -27,7 +33,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
       
       - name: Start Docker infrastructure
-        run: docker-compose -f docker-compose.test.yml up -d
+        run: docker compose -f docker compose.test.yml up -d
       
       - name: Wait for services
         run: |
@@ -44,7 +50,7 @@ jobs:
         run: cargo llvm-cov --all-features --workspace --html
       
       - name: Upload coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: target/llvm-cov/html/
@@ -68,7 +74,7 @@ jobs:
       
       - name: Cleanup
         if: always()
-        run: docker-compose -f docker-compose.test.yml down -v
+        run: docker compose -f docker compose.test.yml down -v
       
       - name: Notify on failure
         if: failure()
@@ -82,11 +88,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install Protocol Buffers compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+      
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       
       - name: Start Docker infrastructure
-        run: docker-compose -f docker-compose.test.yml up -d
+        run: docker compose -f docker compose.test.yml up -d
       
       - name: Wait for services
         run: sleep 30
@@ -104,5 +116,5 @@ jobs:
       
       - name: Cleanup
         if: always()
-        run: docker-compose -f docker-compose.test.yml down -v
+        run: docker compose -f docker compose.test.yml down -v
 

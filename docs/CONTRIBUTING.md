@@ -2,6 +2,24 @@
 
 This document describes how to run tests for the Zenoh Recorder project.
 
+## Prerequisites
+
+Before running tests, ensure you have the required dependencies installed:
+
+1. **Rust toolchain** (1.75 or later)
+2. **Protocol Buffers compiler** (`protoc`):
+   ```bash
+   # Debian/Ubuntu
+   sudo apt-get update && sudo apt-get install -y protobuf-compiler
+   
+   # macOS
+   brew install protobuf
+   
+   # Verify
+   protoc --version
+   ```
+3. **Docker and Docker Compose** (for integration tests)
+
 ## Quick Start
 
 ### Unit Tests Only (No Docker Required)

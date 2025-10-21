@@ -108,7 +108,8 @@ pub trait StorageBackend: Send + Sync {
         }
     }
 
-    /// Health check
+    /// Health check (available for monitoring, not yet integrated into main flow)
+    #[allow(dead_code)]
     async fn health_check(&self) -> Result<bool>;
 
     /// Get backend type identifier

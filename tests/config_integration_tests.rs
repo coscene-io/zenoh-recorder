@@ -149,10 +149,10 @@ logging:
         result.is_err(),
         "Expected validation error for invalid config"
     );
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("max_buffer_size_bytes"));
+    let err = result.unwrap_err();
+    // Check if error chain contains the validation message (using Debug format to see full chain)
+    let error_string = format!("{:?}", err);
+    assert!(error_string.contains("max_buffer_size_bytes"));
 
     // Cleanup
     fs::remove_file(temp_path).ok();

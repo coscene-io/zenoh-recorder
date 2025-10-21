@@ -107,6 +107,32 @@ jobs:
   integration-tests:
     name: Integration Tests (Docker)
     runs-on: ubuntu-latest
+    
+    services:
+      reductstore:
+        image: reduct/store:latest
+        env:
+          RS_LOG_LEVEL: INFO
+          RS_DATA_PATH: /data
+          RS_API_BASE_PATH: /
+        ports:
+          - 28383:8383
+        options: >-
+          --health-cmd="curl -f http://localhost:8383/api/v1/info || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      
+      zenoh:
+        image: eclipse/zenoh:latest
+        ports:
+          - 27447:7447
+        options: >-
+          --health-cmd="zenoh-plugin-rest info || exit 0"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    
     steps:
       - uses: actions/checkout@v4
       
@@ -119,13 +145,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Start Docker services
-        run: docker compose -f docker compose.test.yml up -d
-      
-      - name: Wait for services to be ready
+      - name: Wait for ReductStore to be ready
         run: |
           echo "Waiting for ReductStore..."
           for i in {1..30}; do
@@ -134,13 +154,14 @@ jobs:
               break
             fi
             if [ $i -eq 30 ]; then
-              echo "ReductStore failed to start"
-              docker compose -f docker compose.test.yml logs reductstore-test
+              echo "ReductStore failed to become ready"
               exit 1
             fi
             sleep 2
           done
-          
+      
+      - name: Wait for Zenoh to be ready
+        run: |
           echo "Waiting for Zenoh..."
           for i in {1..30}; do
             if nc -z 127.0.0.1 27447 > /dev/null 2>&1; then
@@ -148,8 +169,7 @@ jobs:
               break
             fi
             if [ $i -eq 30 ]; then
-              echo "Zenoh failed to start"
-              docker compose -f docker compose.test.yml logs zenoh-test
+              echo "Zenoh failed to become ready"
               exit 1
             fi
             sleep 2
@@ -167,19 +187,37 @@ jobs:
           ZENOH_TEST_ENDPOINT: tcp/127.0.0.1:27447
           REDUCTSTORE_TEST_URL: http://127.0.0.1:28383
           REDUCTSTORE_TEST_BUCKET: zenoh-e2e-test
-      
-      - name: Show Docker logs on failure
-        if: failure()
-        run: docker compose -f docker compose.test.yml logs
-      
-      - name: Cleanup Docker services
-        if: always()
-        run: docker compose -f docker compose.test.yml down -v
 
   # Coverage report
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    
+    services:
+      reductstore:
+        image: reduct/store:latest
+        env:
+          RS_LOG_LEVEL: INFO
+          RS_DATA_PATH: /data
+          RS_API_BASE_PATH: /
+        ports:
+          - 28383:8383
+        options: >-
+          --health-cmd="curl -f http://localhost:8383/api/v1/info || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      
+      zenoh:
+        image: eclipse/zenoh:latest
+        ports:
+          - 27447:7447
+        options: >-
+          --health-cmd="zenoh-plugin-rest info || exit 0"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    
     steps:
       - uses: actions/checkout@v4
       
@@ -197,11 +235,9 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       
-      - name: Start Docker services
-        run: docker compose -f docker compose.test.yml up -d
-      
-      - name: Wait for services
+      - name: Wait for services to be ready
         run: |
+          echo "Waiting for ReductStore..."
           for i in {1..30}; do
             if curl -sf http://127.0.0.1:28383/api/v1/info > /dev/null 2>&1; then
               echo "ReductStore ready"
@@ -209,6 +245,7 @@ jobs:
             fi
             sleep 2
           done
+          echo "Waiting for Zenoh..."
           for i in {1..30}; do
             if nc -z 127.0.0.1 27447 > /dev/null 2>&1; then
               echo "Zenoh ready"
@@ -229,10 +266,6 @@ jobs:
           files: lcov.info
           fail_ci_if_error: false
           verbose: true
-      
-      - name: Cleanup
-        if: always()
-        run: docker compose -f docker compose.test.yml down -v
 
   # Security audit
   security-audit:
